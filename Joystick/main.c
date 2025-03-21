@@ -78,18 +78,14 @@ void main(void)
 	while(1)
 	{
 
-		int j8, j9;
-        float  adc_v8, adc_v9;
-
-        
 
         j7 = readADC(ADC_CHSELR_CHSEL7);
         j8 = readADC(ADC_CHSELR_CHSEL8);
         j9 = readADC(ADC_CHSELR_CHSEL9);
 
-        adc_v7 = (j7 * 3.3f) / 0x1000;
-        adc_v8 = (j8 * 3.3f) / 0x1000;
-        adc_v9 = (j9 * 3.3f) / 0x1000;
+        a7 = (j7 * 3.3f) / 0x1000;
+        a8 = (j8 * 3.3f) / 0x1000;
+        a9 = (j9 * 3.3f) / 0x1000;
 
         printf("Button=%s\r ADC8=0x%04x (%5.3fV) ADC9=0x%04x (%5.3fV)\r", 
                j7, adc_v7, j8, adc_v8, j9, adc_v9);

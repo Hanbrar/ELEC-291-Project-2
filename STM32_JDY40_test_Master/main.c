@@ -4,6 +4,7 @@
 #include <string.h>
 #include "../Common/Include/serial.h"
 #include "UART2.h"
+#include <math.h>
 
 #define SYSCLK 32000000L
 #define DEF_F 15000L
@@ -88,7 +89,127 @@ void ReceptionOff (void)
 	while (ReceivedBytes2()>0) egetc2(); // Clear FIFO
 }
 
-// Joystick/ADC Reading
+/*Joystick/ADC Reading */
+
+void Configure_Pins(void)
+{
+    // Configure the pin used for a blinking LED: PA8 (pin 18)
+    RCC->IOPENR |= BIT0;  // Peripheral clock enable for Port A
+    GPIOA->MODER = (GPIOA->MODER & ~(BIT17 | BIT16)) | BIT16;  // Set PA8 as output
+
+    // Configure analog inputs (PB1 and PB14) and button input (PB13)
+    RCC->IOPENR |= BIT1;  // Peripheral clock enable for Port B
+
+    // Set PB1 (pin 15) and PB14 (pin 14) to analog mode
+    GPIOB->MODER |= (BIT2 | BIT3);    // Analog mode for PB1
+    GPIOB->MODER |= (BIT28 | BIT29);  // Analog mode for PB14
+
+    // Configure PB13 (pin 13) as input with pull-up resistor
+    GPIOB->MODER &= ~(BIT26 | BIT27);      // Input mode for PB13
+    GPIOB->PUPDR = (GPIOB->PUPDR & ~(BIT26 | BIT27)) | BIT26;  // Pull-up for PB13
+
+    // Enable ADC clock (required for ADC functionality)
+    RCC->AHBENR |= BIT28;  // Enable ADC clock (adjust bit if needed for your MCU)
+}
+
+
+
+void wait_1ms(void)
+{
+	// For SysTick info check the STM32l0xxx Cortex-M0 programming manual.
+	SysTick->LOAD = (F_CPU/1000L) - 1;  // set reload register, counter rolls over from zero, hence -1
+	SysTick->VAL = 0; // load the SysTick counter
+	//SysTick->CTRL = 0x05; // Bit 0: ENABLE, BIT 1: TICKINT, BIT 2:CLKSOURCE
+	SysTick->CTRL  = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_ENABLE_Msk; // Enable SysTick IRQ and SysTick Timer */
+	while((SysTick->CTRL & BIT16)==0); // Bit 16 is the COUNTFLAG.  True when counter rolls over from zero.
+	SysTick->CTRL = 0x00; // Disable Systick counter
+}
+
+void delayms(int len)
+{
+	while(len--) wait_1ms();
+}
+
+
+/*Now ADC functions*/
+
+
+void initADC(void)
+{
+	RCC->APB2ENR |= BIT9; // peripheral clock enable for ADC (page 175 or RM0451)
+
+	// ADC clock selection procedure (page 746 of RM0451)
+	/* (1) Select PCLK by writing 11 in CKMODE */
+	ADC1->CFGR2 |= ADC_CFGR2_CKMODE; /* (1) */
+	
+	// ADC enable sequence procedure (page 745 of RM0451)
+	/* (1) Clear the ADRDY bit */
+	/* (2) Enable the ADC */
+	/* (3) Wait until ADC ready */
+	ADC1->ISR |= ADC_ISR_ADRDY; /* (1) */
+	ADC1->CR |= ADC_CR_ADEN; /* (2) */
+	if ((ADC1->CFGR1 & ADC_CFGR1_AUTOFF) == 0)
+	{
+		while ((ADC1->ISR & ADC_ISR_ADRDY) == 0) /* (3) */
+		{
+			/* For robust implementation, add here time-out management */
+		}
+	}	
+
+	// Calibration code procedure (page 745 of RM0451)
+	/* (1) Ensure that ADEN = 0 */
+	/* (2) Clear ADEN */
+	/* (3) Set ADCAL=1 */
+	/* (4) Wait until EOCAL=1 */
+	/* (5) Clear EOCAL */
+	if ((ADC1->CR & ADC_CR_ADEN) != 0) /* (1) */
+	{
+		ADC1->CR |= ADC_CR_ADDIS; /* (2) */
+	}
+	ADC1->CR |= ADC_CR_ADCAL; /* (3) */
+	while ((ADC1->ISR & ADC_ISR_EOCAL) == 0) /* (4) */
+	{
+		/* For robust implementation, add here time-out management */
+	}
+	ADC1->ISR |= ADC_ISR_EOCAL; /* (5) */
+}
+
+int readADC(unsigned int channel)
+{
+	// Single conversion sequence code example - Software trigger (page 746 of RM0451)
+	/* (1) Select HSI16 by writing 00 in CKMODE (reset value) */
+	/* (2) Select the auto off mode */
+	/* (3) Select channel */
+	/* (4) Select a sampling mode of 111 i.e. 239.5 ADC clk to be greater than17.1us */
+	/* (5) Wake-up the VREFINT (only for VRefInt) */
+	//ADC1->CFGR2 &= ~ADC_CFGR2_CKMODE; /* (1) */
+	ADC1->CFGR1 |= ADC_CFGR1_AUTOFF; /* (2) */
+	ADC1->CHSELR = channel; /* (3) */
+	ADC1->SMPR |= ADC_SMPR_SMP_0 | ADC_SMPR_SMP_1 | ADC_SMPR_SMP_2; /* (4) */
+	if(channel==ADC_CHSELR_CHSEL17)
+	{
+		ADC->CCR |= ADC_CCR_VREFEN; /* (5) */
+	}
+	
+	/* Performs the AD conversion */
+	ADC1->CR |= ADC_CR_ADSTART; /* start the ADC conversion */
+	while ((ADC1->ISR & ADC_ISR_EOC) == 0) /* wait end of conversion */
+	{
+		/* For robust implementation, add here time-out management */
+	}
+
+	return ADC1->DR; // ADC_DR has the 12 bits out of the ADC
+}
+
+
+
+
+
+
+/*#################*/
+
+
+
 
 
 int main(void)
@@ -96,13 +217,23 @@ int main(void)
 	char buff[80];
     int timeout_cnt=0;
 
-	int up = 0;
-	int down = 0;
-	int left = 0;
-	int right = 0;
+	float up = 0;
+	float down = 0;
+	float left = 0;
+	float right = 0;
+
+
+	/*ADC calibration*/
+
+	float a7,a8,a9;
+	int j7,j8,j9;
+
 
 	Hardware_Init();
 	initUART2(9600);
+
+	Configure_Pins();
+	initADC();
 	
 	waitms(1000); // Give putty some time to start.
 	printf("\r\nJDY-40 Master test\r\n");
@@ -125,10 +256,16 @@ int main(void)
 	while(1)
 	{
 
-		up ``=  1;
-		down = 0;
-		left = 0;
-		right = 0;
+
+		j7 = readADC(ADC_CHSELR_CHSEL7);
+        j8 = readADC(ADC_CHSELR_CHSEL8);
+        j9 = readADC(ADC_CHSELR_CHSEL9);
+
+		up = (j7 * 3.3f) / 0x1000;
+        down = (j8 * 3.3f) / 0x1000;
+        right = (j9 * 3.3f) / 0x1000;
+		left=3;
+		
 		sprintf(buff, "U%d,D%d,R%d,L%d\n",up,down,right,left); // Construct a test message
 		eputc2('!'); // Send a message to the slave. First send the 'attention' character which is '!'
 		// Wait a bit so the slave has a chance to get ready

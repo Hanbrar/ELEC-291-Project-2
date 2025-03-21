@@ -163,7 +163,7 @@ LOAD C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\
 LOAD C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libm.a
 END GROUP
 
-.text           0x08000000     0x6fac
+.text           0x08000000     0x6fa4
  *(.vectors)
  .vectors       0x08000000       0xb8 startup.o
                 0x08000000                Vectors
@@ -688,87 +688,88 @@ END GROUP
  .text          0x080068d8       0x4c C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\lib\gcc\arm-none-eabi\10.3.1\thumb\v6-m\nofp\libgcc.a(floatunsidf.o)
                 0x080068d8                __aeabi_ui2d
  *(.rodata*)
- .rodata        0x08006924       0x80 main.o
- .rodata        0x080069a4       0x7c startup.o
- .rodata        0x08006a20       0x80 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\lib\gcc\arm-none-eabi\10.3.1\thumb\v6-m\nofp\libgcc.a(divsf3.o)
- .rodata        0x08006aa0       0x40 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\lib\gcc\arm-none-eabi\10.3.1\thumb\v6-m\nofp\libgcc.a(mulsf3.o)
+ .rodata        0x08006924       0x76 main.o
+ *fill*         0x0800699a        0x2 
+ .rodata        0x0800699c       0x7c startup.o
+ .rodata        0x08006a18       0x80 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\lib\gcc\arm-none-eabi\10.3.1\thumb\v6-m\nofp\libgcc.a(divsf3.o)
+ .rodata        0x08006a98       0x40 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\lib\gcc\arm-none-eabi\10.3.1\thumb\v6-m\nofp\libgcc.a(mulsf3.o)
  .rodata.__sf_fake_stderr
-                0x08006ae0       0x20 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-findfp.o)
-                0x08006ae0                __sf_fake_stderr
+                0x08006ad8       0x20 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-findfp.o)
+                0x08006ad8                __sf_fake_stderr
  .rodata.__sf_fake_stdin
-                0x08006b00       0x20 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-findfp.o)
-                0x08006b00                __sf_fake_stdin
+                0x08006af8       0x20 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-findfp.o)
+                0x08006af8                __sf_fake_stdin
  .rodata.__sf_fake_stdout
-                0x08006b20       0x20 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-findfp.o)
-                0x08006b20                __sf_fake_stdout
+                0x08006b18       0x20 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-findfp.o)
+                0x08006b18                __sf_fake_stdout
  .rodata._global_impure_ptr
-                0x08006b40        0x4 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-impure.o)
-                0x08006b40                _global_impure_ptr
+                0x08006b38        0x4 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-impure.o)
+                0x08006b38                _global_impure_ptr
  .rodata._printf_float.str1.1
-                0x08006b44       0x12 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-nano-vfprintf_float.o)
+                0x08006b3c       0x12 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-nano-vfprintf_float.o)
  .rodata._printf_i.str1.1
-                0x08006b56       0x22 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-nano-vfprintf_i.o)
+                0x08006b4e       0x22 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-nano-vfprintf_i.o)
  .rodata._dtoa_r.str1.1
-                0x08006b78       0xb3 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-dtoa.o)
+                0x08006b70       0xb3 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-dtoa.o)
                                  0xb5 (size before relaxing)
  .rodata._Balloc.str1.1
-                0x08006c2b       0x7f C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-mprec.o)
+                0x08006c23       0x7f C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-mprec.o)
                                  0x96 (size before relaxing)
  .rodata.__multadd.str1.1
-                0x08006caa       0x11 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-mprec.o)
- *fill*         0x08006caa        0x6 
+                0x08006ca2       0x11 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-mprec.o)
+ *fill*         0x08006ca2        0x6 
  .rodata.__mprec_bigtens
-                0x08006cb0       0x28 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-mprec.o)
-                0x08006cb0                __mprec_bigtens
+                0x08006ca8       0x28 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-mprec.o)
+                0x08006ca8                __mprec_bigtens
  .rodata.__mprec_tens
-                0x08006cd8       0xc8 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-mprec.o)
-                0x08006cd8                __mprec_tens
+                0x08006cd0       0xc8 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-mprec.o)
+                0x08006cd0                __mprec_tens
  .rodata.__mprec_tinytens
-                0x08006da0       0x28 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-mprec.o)
-                0x08006da0                __mprec_tinytens
- .rodata.p05.0  0x08006dc8        0xc C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-mprec.o)
+                0x08006d98       0x28 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-mprec.o)
+                0x08006d98                __mprec_tinytens
+ .rodata.p05.0  0x08006dc0        0xc C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-mprec.o)
  .rodata._vfprintf_r.str1.1
-                0x08006dd4       0x11 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-nano-vfprintf.o)
+                0x08006dcc       0x11 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-nano-vfprintf.o)
  .rodata.__assert_func.str1.1
-                0x08006de5       0x3c C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-assert.o)
+                0x08006ddd       0x3c C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-assert.o)
                                  0x3d (size before relaxing)
  .rodata._setlocale_r.str1.1
-                0x08006e21        0x8 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-locale.o)
+                0x08006e19        0x8 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-locale.o)
                                   0x9 (size before relaxing)
  .rodata.str1.1
-                0x08006e29        0x2 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-locale.o)
+                0x08006e21        0x2 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-locale.o)
  .rodata._ctype_
-                0x08006e2b      0x101 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-ctype_.o)
-                0x08006e2b                _ctype_
- .rodata        0x08006f2c       0x40 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\lib\gcc\arm-none-eabi\10.3.1\thumb\v6-m\nofp\libgcc.a(divdf3.o)
- .rodata        0x08006f6c       0x40 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\lib\gcc\arm-none-eabi\10.3.1\thumb\v6-m\nofp\libgcc.a(muldf3.o)
-                0x08006fac                . = ALIGN (0x4)
-                0x08006fac                PROVIDE (__init_array_start = .)
+                0x08006e23      0x101 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\arm-none-eabi\lib\thumb\v6-m\nofp\libc_nano.a(lib_a-ctype_.o)
+                0x08006e23                _ctype_
+ .rodata        0x08006f24       0x40 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\lib\gcc\arm-none-eabi\10.3.1\thumb\v6-m\nofp\libgcc.a(divdf3.o)
+ .rodata        0x08006f64       0x40 C:\Program Files (x86)\GNU Arm Embedded Toolchain\10 2021.10\lib\gcc\arm-none-eabi\10.3.1\thumb\v6-m\nofp\libgcc.a(muldf3.o)
+                0x08006fa4                . = ALIGN (0x4)
+                0x08006fa4                PROVIDE (__init_array_start = .)
  *(SORT_BY_NAME(.init_array.*))
  *(.init_array)
-                0x08006fac                PROVIDE (__init_array_end = .)
-                0x08006fac                . = ALIGN (0x4)
-                0x08006fac                _etext = .
+                0x08006fa4                PROVIDE (__init_array_end = .)
+                0x08006fa4                . = ALIGN (0x4)
+                0x08006fa4                _etext = .
 
-.glue_7         0x08006fac        0x0
- .glue_7        0x08006fac        0x0 linker stubs
+.glue_7         0x08006fa4        0x0
+ .glue_7        0x08006fa4        0x0 linker stubs
 
-.glue_7t        0x08006fac        0x0
- .glue_7t       0x08006fac        0x0 linker stubs
+.glue_7t        0x08006fa4        0x0
+ .glue_7t       0x08006fa4        0x0 linker stubs
 
-.vfp11_veneer   0x08006fac        0x0
- .vfp11_veneer  0x08006fac        0x0 linker stubs
+.vfp11_veneer   0x08006fa4        0x0
+ .vfp11_veneer  0x08006fa4        0x0 linker stubs
 
-.v4_bx          0x08006fac        0x0
- .v4_bx         0x08006fac        0x0 linker stubs
+.v4_bx          0x08006fa4        0x0
+ .v4_bx         0x08006fa4        0x0 linker stubs
 
-.iplt           0x08006fac        0x0
- .iplt          0x08006fac        0x0 main.o
+.iplt           0x08006fa4        0x0
+ .iplt          0x08006fa4        0x0 main.o
 
-.rel.dyn        0x08006fac        0x0
- .rel.iplt      0x08006fac        0x0 main.o
+.rel.dyn        0x08006fa4        0x0
+ .rel.iplt      0x08006fa4        0x0 main.o
 
-.data           0x20000000      0x1d4 load address 0x08006fac
+.data           0x20000000      0x1d4 load address 0x08006fa4
                 0x20000000                . = ALIGN (0x4)
                 0x20000000                _data = .
  *(.data*)
@@ -859,10 +860,10 @@ END GROUP
                 0x200001d4                . = ALIGN (0x4)
                 0x200001d4                _edata = .
 
-.igot.plt       0x200001d4        0x0 load address 0x08007180
+.igot.plt       0x200001d4        0x0 load address 0x08007178
  .igot.plt      0x200001d4        0x0 main.o
 
-.bss            0x200001d4       0xc8 load address 0x08007180
+.bss            0x200001d4       0xc8 load address 0x08007178
                 0x200001d4                _bss = .
  *(.bss*)
  .bss           0x200001d4        0x0 main.o
@@ -994,19 +995,19 @@ END GROUP
 OUTPUT(main.elf elf32-littlearm)
 LOAD linker stubs
 
-.debug_info     0x00000000     0x2293
- .debug_info    0x00000000      0xc7a main.o
- .debug_info    0x00000c7a      0x3ad startup.o
- .debug_info    0x00001027      0x82d serial.o
- .debug_info    0x00001854      0x31b adc.o
- .debug_info    0x00001b6f      0x724 newlib_stubs.o
+.debug_info     0x00000000     0x22a3
+ .debug_info    0x00000000      0xc8a main.o
+ .debug_info    0x00000c8a      0x3ad startup.o
+ .debug_info    0x00001037      0x82d serial.o
+ .debug_info    0x00001864      0x31b adc.o
+ .debug_info    0x00001b7f      0x724 newlib_stubs.o
 
-.debug_abbrev   0x00000000      0x81a
- .debug_abbrev  0x00000000      0x22a main.o
- .debug_abbrev  0x0000022a      0x174 startup.o
- .debug_abbrev  0x0000039e      0x1f5 serial.o
- .debug_abbrev  0x00000593      0x10c adc.o
- .debug_abbrev  0x0000069f      0x17b newlib_stubs.o
+.debug_abbrev   0x00000000      0x83a
+ .debug_abbrev  0x00000000      0x24a main.o
+ .debug_abbrev  0x0000024a      0x174 startup.o
+ .debug_abbrev  0x000003be      0x1f5 serial.o
+ .debug_abbrev  0x000005b3      0x10c adc.o
+ .debug_abbrev  0x000006bf      0x17b newlib_stubs.o
 
 .debug_aranges  0x00000000       0xa8
  .debug_aranges
@@ -1027,17 +1028,17 @@ LOAD linker stubs
  .debug_line    0x00000a04      0x1b9 adc.o
  .debug_line    0x00000bbd      0x2ac newlib_stubs.o
 
-.debug_str      0x00000000      0xa8c
- .debug_str     0x00000000      0x5a3 main.o
-                                0x615 (size before relaxing)
- .debug_str     0x000005a3       0xf5 startup.o
-                                0x2ae (size before relaxing)
- .debug_str     0x00000698      0x178 serial.o
-                                0x386 (size before relaxing)
- .debug_str     0x00000810       0x71 adc.o
-                                0x242 (size before relaxing)
- .debug_str     0x00000881      0x20b newlib_stubs.o
-                                0x3ac (size before relaxing)
+.debug_str      0x00000000      0xab4
+ .debug_str     0x00000000      0x5cb main.o
+                                0x63d (size before relaxing)
+ .debug_str     0x000005cb       0xf5 startup.o
+                                0x2c1 (size before relaxing)
+ .debug_str     0x000006c0      0x178 serial.o
+                                0x399 (size before relaxing)
+ .debug_str     0x00000838       0x71 adc.o
+                                0x255 (size before relaxing)
+ .debug_str     0x000008a9      0x20b newlib_stubs.o
+                                0x3bf (size before relaxing)
 
 .comment        0x00000000       0x49
  .comment       0x00000000       0x49 main.o
