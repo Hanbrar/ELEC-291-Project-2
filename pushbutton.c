@@ -13,10 +13,10 @@
 //       VDD -|1       32|- VSS
 //      PC14 -|2       31|- BOOT0
 //      PC15 -|3       30|- PB7
-//      NRST -|4       29|- PB6
-//      VDDA -|5       28|- PB5
+//      NRST -|4       29|- PB6 this
+//      VDDA -|5       28|- PB5 this 
 //       PA0 -|6       27|- PB4
-//       PA1 -|7       26|- PB3
+//       PA1 -|7       26|- PB3 this
 //       PA2 -|8       25|- PA15 (Used for RXD of UART2, connects to TXD of JDY40)
 //       PA3 -|9       24|- PA14 (Used for TXD of UART2, connects to RXD of JDY40)
 //       PA4 -|10      23|- PA13 (Used for SET of JDY40)
@@ -29,7 +29,7 @@
 //             ----------
 
 // define push buttons
-// PB1        PB2          PB3
+// PB3        PB5          PB6
 // Auto_mode  Manual_mode  coin_picking
 
 
@@ -69,6 +69,26 @@ void Hardware_Init(void)
 	GPIOA->PUPDR &= ~(BIT17);
 }
 
+void Configure_Buttons(void)
+{
+    RCC->IOPENR |= BIT1; // Enable clock for Port B
+
+    // Clear mode bits for PB3, PB5, and PB6 (set as input: 00)
+    GPIOB->MODER &= ~(0x3 << (3 * 2)); // PB3
+    GPIOB->MODER &= ~(0x3 << (5 * 2)); // PB5
+    GPIOB->MODER &= ~(0x3 << (6 * 2)); // PB6
+
+    // Enable internal pull-ups for PB3, PB5, and PB6 (set to 01)
+    GPIOB->PUPDR &= ~(0x3 << (3 * 2));
+    GPIOB->PUPDR |=  (0x1 << (3 * 2));
+
+    GPIOB->PUPDR &= ~(0x3 << (5 * 2));
+    GPIOB->PUPDR |=  (0x1 << (5 * 2));
+
+    GPIOB->PUPDR &= ~(0x3 << (6 * 2));
+    GPIOB->PUPDR |=  (0x1 << (6 * 2));
+}  
+
 void SendATCommand (char * s)
 {
 	char buff[40];
@@ -100,7 +120,8 @@ int main(void)
 
 	Hardware_Init();
 	initUART2(9600);
-	
+	Configure_Buttons();
+
 	waitms(1000); // Give putty some time to start.
 	printf("\r\nJDY-40 Master test\r\n");
 
@@ -119,48 +140,72 @@ int main(void)
 	// number from 0x0000 to 0xFFFF.  In this case is set to 0xABBA
 	SendATCommand("AT+DVIDABBA\r\n");
 	 
-	while(1)
-	{
-		sprintf(buff, "%03d,%03d\n", cont1, cont2); // Construct a test message
-		eputc2('!'); // Send a message to the slave. First send the 'attention' character which is '!'
-		// Wait a bit so the slave has a chance to get ready
-		waitms(5); // This may need adjustment depending on how busy is the slave
-		eputs2(buff); // Send the test message
-		
-		if(++cont1>200) cont1=0; // Increment test counters for next message
-		if(++cont2>200) cont2=0;
-		
-		waitms(5); // This may need adjustment depending on how busy is the slave
+	while (1)
+    {
+        // Poll the push buttons (active low due to pull-ups).
+        char btn_state[32] = "";
+        if (!(GPIOB->IDR & (1 << 3))) {  // PB3 pressed (Auto_mode)
+            strcat(btn_state, "Auto_mode ");
+        }
+        if (!(GPIOB->IDR & (1 << 5))) {  // PB5 pressed (Manual_mode)
+            strcat(btn_state, "Manual_mode ");
+        }
+        if (!(GPIOB->IDR & (1 << 6))) {  // PB6 pressed (coin_picking)
+            strcat(btn_state, "coin_picking ");
+        }
+        
+        // If any button is pressed, send the button state over UART.
+        if (strlen(btn_state) > 0)
+        {
+            sprintf(buff, "Buttons: %s\n", btn_state);
+            eputs2(buff);
+            printf("%s", buff);
+        }
+        else
+        {
+            // Otherwise, send a test message.
+            sprintf(buff, "%03d,%03d\n", cont1, cont2);
+            eputc2('!');  // Send attention character.
+            waitms(5);
+            eputs2(buff); // Send test message.
+            
+            if (++cont1 > 200)
+                cont1 = 0;
+            if (++cont2 > 200)
+                cont2 = 0;
+        }
 
-		eputc2('@'); // Request a message from the slave
-		
-		timeout_cnt=0;
-		while(1)
-		{
-			if(ReceivedBytes2()>0) break; // Something has arrived
-			if(++timeout_cnt>250) break; // Wait up to 25ms for the repply
-			Delay_us(100); // 100us*250=25ms
-		}
-		
-		if(ReceivedBytes2()>0) // Something has arrived from the slave
-		{
-			egets2(buff, sizeof(buff)-1);
-			if(strlen(buff)==6) // Check for valid message size (5 characters + new line '\n')
-			
-				printf("Slave says: %s\r", buff); 
-			}
-			else
-			{
-				printf("*** BAD MESSAGE ***: %s\r", buff);
-			}
-		}
-		else // Timed out waiting for reply
-		{
-			printf("NO RESPONSE\r\n", buff);
-		}
-		
-		waitms(50);  // Set the information interchange pace: communicate about every 50ms
-	}
+        waitms(5);  // Small delay
+
+        eputc2('@'); // Request a message from the slave.
+
+        timeout_cnt = 0;
+        while (1)
+        {
+            if (ReceivedBytes2() > 0)
+                break; // Exit if data is received.
+            if (++timeout_cnt > 250)
+                break; // Timeout after ~25ms.
+            Delay_us(100);
+        }
+
+        if (ReceivedBytes2() > 0)
+        {
+            egets2(buff, sizeof(buff)-1);
+            if (strlen(buff) == 6)  // Check for expected message length (example: 5 characters + newline)
+                printf("Slave says: %s\r", buff);
+            else
+                printf("*** BAD MESSAGE ***: %s\r", buff);
+        }
+        else
+        {
+            printf("NO RESPONSE\r\n");
+        }
+
+        waitms(50);  // Pace communications (~50ms between cycles)
+    }
+}
 
 
 }
+// pb6 pb5 pb3 
