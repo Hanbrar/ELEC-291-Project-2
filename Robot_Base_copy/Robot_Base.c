@@ -243,11 +243,9 @@ void main(void)
 	volatile unsigned long t=0;
     int adcval;
     long int v;
+	float up,dowm,left,right;
 	unsigned long int count, f;
 	unsigned char LED_toggle=0;
-	float up,down,left,right;
-
-	
 
 	CFGCON = 0;
   

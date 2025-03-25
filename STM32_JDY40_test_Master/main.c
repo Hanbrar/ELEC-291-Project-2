@@ -32,7 +32,9 @@
 #define F_CPU 32000000L
 
 // Master JDY-40
-// Uses SysTick to delay <us> micro-seconds. 
+// Uses SysTick to delay <us> micro-seconds.
+
+
 void Delay_us(unsigned char us)
 {
 	// For SysTick info check the STM32L0xxx Cortex-M0 programming manual page 85.
@@ -91,28 +93,21 @@ void ReceptionOff (void)
 
 /*Joystick/ADC Reading */
 
-void Configure_Pins(void)
+void Configure_Pins (void)
 {
-    // Configure the pin used for a blinking LED: PA8 (pin 18)
-    RCC->IOPENR |= BIT0;  // Peripheral clock enable for Port A
-    GPIOA->MODER = (GPIOA->MODER & ~(BIT17 | BIT16)) | BIT16;  // Set PA8 as output
 
-    // Configure analog inputs (PB1 and PB14) and button input (PB13)
-    RCC->IOPENR |= BIT1;  // Peripheral clock enable for Port B
+    // Configure PB1 (pin 15) as an analog input
+    RCC->IOPENR |= BIT1;  // Enable clock for GPIOB
+    GPIOB->MODER |= (BIT2 | BIT3);  // Set PB1 to analog mode
 
-    // Set PB1 (pin 15) and PB14 (pin 14) to analog mode
-    GPIOB->MODER |= (BIT2 | BIT3);    // Analog mode for PB1
-    GPIOB->MODER |= (BIT28 | BIT29);  // Analog mode for PB14
+    // Configure PB13 (pin 13) as a digital input with pull-up resistor (Button)
+    GPIOB->MODER &= ~(BIT26 | BIT27);  // Set PB13 as input mode
+	GPIOB->PUPDR |= BIT26; // Enable internal pull-up for PB13
+	GPIOB->PUPDR &= ~BIT27; // Ensure pull-down is disabled
 
-    // Configure PB13 (pin 13) as input with pull-up resistor
-    GPIOB->MODER &= ~(BIT26 | BIT27);      // Input mode for PB13
-    GPIOB->PUPDR = (GPIOB->PUPDR & ~(BIT26 | BIT27)) | BIT26;  // Pull-up for PB13
-
-    // Enable ADC clock (required for ADC functionality)
-    RCC->AHBENR |= BIT28;  // Enable ADC clock (adjust bit if needed for your MCU)
+    // Enable ADC clock
+    RCC->AHBENR |= BIT28;  // Enable ADC clock
 }
-
-
 
 void wait_1ms(void)
 {
@@ -217,17 +212,12 @@ int main(void)
 	char buff[80];
     int timeout_cnt=0;
 
-	float up = 0;
-	float down = 0;
-	float left = 0;
-	float right = 0;
+	int up = 0;
+	int down = 0;
+	int left = 0;
+	int right = 0;
 
-
-	/*ADC calibration*/
-
-	float a7,a8,a9;
-	int j7,j8,j9;
-
+    int j8, j9, button_state;
 
 	Hardware_Init();
 	initUART2(9600);
@@ -255,18 +245,31 @@ int main(void)
 	 
 	while(1)
 	{
+		up = 0;
+		down = 0;
+		right = 0;
+		left = 0;
 
-
-		j7 = readADC(ADC_CHSELR_CHSEL7);
-        j8 = readADC(ADC_CHSELR_CHSEL8);
+		j8 = readADC(ADC_CHSELR_CHSEL8);
         j9 = readADC(ADC_CHSELR_CHSEL9);
 
-		up = (j7 * 3.3f) / 0x1000;
-        down = (j8 * 3.3f) / 0x1000;
-        right = (j9 * 3.3f) / 0x1000;
-		left=3;
-		
-		sprintf(buff, "U%d,D%d,R%d,L%d\n",up,down,right,left); // Construct a test message
+		if(j8>2900){
+			right = 1;
+		} else if (j8>1000) {
+			
+		} else {
+			left = 1;
+		}
+
+		if(j9>2900){
+			up = 1;
+		} else if (j9>1000) {
+			
+		} else {
+			down = 1;
+		}
+
+		sprintf(buff, "%d %d %d %d\n", up, down, left, right);
 		eputc2('!'); // Send a message to the slave. First send the 'attention' character which is '!'
 		// Wait a bit so the slave has a chance to get ready
 		waitms(5); // This may need adjustment depending on how busy is the slave
@@ -288,14 +291,7 @@ int main(void)
 		if(ReceivedBytes2()>0) // Something has arrived from the slave
 		{
 			egets2(buff, sizeof(buff)-1);
-			if(strlen(buff)==6) // Check for valid message size (5 characters + new line '\n')
-			{
-				printf("Slave says: %s\r", buff);
-			}
-			else
-			{
-				printf("*** BAD MESSAGE ***: %s\r", buff);
-			}
+			printf("Slave says: %s\r", buff);
 		}
 		else // Timed out waiting for reply
 		{
@@ -303,6 +299,9 @@ int main(void)
 		}
 		
 		waitms(50);  // Set the information interchange pace: communicate about every 50ms
+		fflush(stdout);
+        GPIOA->ODR ^= BIT8; // Toggle PA8 (LED)
+        delayms(500);
 	}
 
 

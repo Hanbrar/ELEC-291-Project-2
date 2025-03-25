@@ -42,56 +42,52 @@ void delayms(int len)
 	while(len--) wait_1ms();
 }
 
-void Configure_Pins(void)
+void Configure_Pins (void)
 {
-    // Configure the pin used for a blinking LED: PA8 (pin 18)
-    RCC->IOPENR |= BIT0;  // Peripheral clock enable for Port A
-    GPIOA->MODER = (GPIOA->MODER & ~(BIT17 | BIT16)) | BIT16;  // Set PA8 as output
 
-    // Configure analog inputs (PB1 and PB14) and button input (PB13)
-    RCC->IOPENR |= BIT1;  // Peripheral clock enable for Port B
+    // Configure PB1 (pin 15) as an analog input
+    RCC->IOPENR |= BIT1;  // Enable clock for GPIOB
+    GPIOB->MODER |= (BIT2 | BIT3);  // Set PB1 to analog mode
 
-    // Set PB1 (pin 15) and PB14 (pin 14) to analog mode
-    GPIOB->MODER |= (BIT2 | BIT3);    // Analog mode for PB1
-    GPIOB->MODER |= (BIT28 | BIT29);  // Analog mode for PB14
+    // Configure PB13 (pin 13) as a digital input with pull-up resistor (Button)
+    GPIOB->MODER &= ~(BIT26 | BIT27);  // Set PB13 as input mode
+	GPIOB->PUPDR |= BIT26; // Enable internal pull-up for PB13
+	GPIOB->PUPDR &= ~BIT27; // Ensure pull-down is disabled
 
-    // Configure PB13 (pin 13) as input with pull-up resistor
-    GPIOB->MODER &= ~(BIT26 | BIT27);      // Input mode for PB13
-    GPIOB->PUPDR = (GPIOB->PUPDR & ~(BIT26 | BIT27)) | BIT26;  // Pull-up for PB13
-
-    // Enable ADC clock (required for ADC functionality)
-    RCC->AHBENR |= BIT28;  // Enable ADC clock (adjust bit if needed for your MCU)
+    // Enable ADC clock
+    RCC->AHBENR |= BIT28;  // Enable ADC clock
 }
 
 void main(void)
 {
-	float a7,a8,a9;
-	int j7,j8,j9;
+    float adc_v_8, adc_v_9;
+    int j8, j9, button_state;
 	
     delayms(500); // Give PuTTY time to start
-	printf("\x1b[2J\x1b[1;1H"); // Clear screen using ANSI escape sequence.
-	printf("STM32L051 ADC Test.  Analog input is PB1 (pin 15).\r\n");
+    printf("\x1b[2J\x1b[1;1H"); // Clear screen using ANSI escape sequence.
+    printf("STM32L051 ADC + Button Test.  Analog input is PB1 (pin 15), Button is PB13 (pin 13).\r\n");
 	
-	Configure_Pins();
-	initADC();
+    Configure_Pins();
+    initADC();
 	
-	while(1)
-	{
-
-
-        j7 = readADC(ADC_CHSELR_CHSEL7);
+    while(1)
+    {
+        // Read ADC values
         j8 = readADC(ADC_CHSELR_CHSEL8);
         j9 = readADC(ADC_CHSELR_CHSEL9);
+        
+        adc_v_8 = (j8 * 3.3f) / 0x1000;
+        adc_v_9 = (j9 * 3.3f) / 0x1000;
 
-        a7 = (j7 * 3.3f) / 0x1000;
-        a8 = (j8 * 3.3f) / 0x1000;
-        a9 = (j9 * 3.3f) / 0x1000;
+        // Read Button Input (PB13)
+        button_state = (GPIOB->IDR & BIT13) ? 1 : 0;  // Read PB13 input, high = not pressed, low = pressed
 
-        printf("Button=%s\r ADC8=0x%04x (%5.3fV) ADC9=0x%04x (%5.3fV)\r", 
-               j7, adc_v7, j8, adc_v8, j9, adc_v9);
+        // Display ADC readings and button state in PuTTY
+        printf("P15=0x%04x (%5.3fV) P14=0x%04x (%5.3fV) P13 Button =%s\r", 
+               j8, adc_v_8, j9, adc_v_9, button_state ? "Released" : "Pressed");
 
-		fflush(stdout);
-		GPIOA->ODR ^= BIT8; // Complement PA8 (pin 18)
-		delayms(500);
-	}
+        fflush(stdout);
+        GPIOA->ODR ^= BIT8; // Toggle PA8 (LED)
+        delayms(500);
+    }
 }
