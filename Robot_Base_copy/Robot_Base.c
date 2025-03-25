@@ -42,6 +42,27 @@ volatile int ISR_pwm1=150, ISR_pwm2=150, ISR_cnt=0;
 
 // The Interrupt Service Routine for timer 1 is used to generate one or more standard
 // hobby servo signals.  The servo signal has a fixed period of 20ms and a pulse width
+
+#define PWM_FREQ    200000L       // 200 kHz PWM frequency
+#define DUTY_CYCLE  50  
+
+// Motor direction definitions
+#define FORWARD  0
+#define BACKWARD 1
+#define STOP     2
+
+
+// Motor1 direction pins (adjust according to your wiring)
+#define MOTOR1_DIR_A   LATAbits.LATA1  // Motor1 forward control pin (port A, bit 1)
+#define MOTOR1_DIR_B   LATAbits.LATA2  // Motor1 reverse control pin (port A, bit 2)
+
+
+
+// Motor2 direction pins (adjust according to your wiring)
+#define MOTOR2_DIR_A   LATBbits.LATB0  // Motor2 forward control pin (port B, bit 0)
+#define MOTOR2_DIR_B   LATBbits.LATB1  // Motor2 reverse control pin (port B, bit 1)
+
+
 // between 0.6ms and 2.4ms.
 void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 {
@@ -238,6 +259,105 @@ void PrintFixedPoint (unsigned long number, int decimals)
 
 // In order to keep this as nimble as possible, avoid
 // using floating point or printf() on any of its forms!
+
+/* PWM Motor setup functions*/
+
+/*###########################*/
+/*###########################*/
+
+
+void Init_pwm(void)
+{
+    // Map OC1 to PA0 for Motor1 PWM output
+    RPA0Rbits.RPA0R = 0x0005;  // OC1 function
+
+    // Map OC2 to RPB4 for Motor2 PWM output
+    RPB4Rbits.RPB4R = 0x0005;  // OC2 function
+
+    // Configure OC1 and OC2 in standard PWM mode
+    OC1CON = 0x0006; // Set OC1 for standard PWM mode
+    OC2CON = 0x0006; // Set OC2 for standard PWM mode
+
+    // Configure Timer2 used by both PWM channels
+    T2CONbits.TCKPS = 0;  // Set Timer2 prescaler to 1:1
+    PR2 = (SYSCLK / (PWM_FREQ * 1)) - 1;  // Calculate period for PWM
+
+    // Set initial duty cycles (50% duty cycle using DUTY_CYCLE macro)
+    OC1RS = (PR2 + 1) * ((float)DUTY_CYCLE / 100);
+    OC2RS = (PR2 + 1) * ((float)DUTY_CYCLE / 100);
+
+    // Clear Timer2 settings and start Timer2
+    T2CON = 0;
+    T2CONSET = 0x8000;  // Turn on Timer2
+
+    // Enable the Output Compare modules to start PWM generation
+    OC1CONSET = 0x8000; // Enable OC1
+    OC2CONSET = 0x8000; // Enable OC2
+}
+
+
+
+
+// Set Motor1 speed using PWM (0-255 range)
+void Motor1_SetSpeed(unsigned char speed)
+{
+    // Scale speed (0 to 255) to timer counts
+    OC1RS = (PR2 + 1) * ((float)speed / 256.0);
+}
+
+// Set Motor2 speed using PWM (0-255 range)
+void Motor2_SetSpeed(unsigned char speed)
+{
+    // Scale speed (0 to 255) to timer counts
+    OC2RS = (PR2 + 1) * ((float)speed / 256.0);
+}
+
+// Set Motor1 direction (FORWARD, BACKWARD, STOP)
+void Motor1_SetDirection(int direction)
+{
+    if(direction == FORWARD)
+    {
+        MOTOR1_DIR_A = 1;
+        MOTOR1_DIR_B = 0;
+    }
+    else if(direction == BACKWARD)
+    {
+        MOTOR1_DIR_A = 0;
+        MOTOR1_DIR_B = 1;
+    }
+    else  // STOP
+    {
+        MOTOR1_DIR_A = 0;
+        MOTOR1_DIR_B = 0;
+    }
+}
+
+// Set Motor2 direction (FORWARD, BACKWARD, STOP)
+void Motor2_SetDirection(int direction)
+{
+    if(direction == FORWARD)
+    {
+        MOTOR2_DIR_A = 1;
+        MOTOR2_DIR_B = 0;
+    }
+    else if(direction == BACKWARD)
+    {
+        MOTOR2_DIR_A = 0;
+        MOTOR2_DIR_B = 1;
+    }
+    else  // STOP
+    {
+        MOTOR2_DIR_A = 0;
+        MOTOR2_DIR_B = 0;
+    }
+}
+
+
+
+/*###########################*/
+/*###########################*/
+
+
 void main(void)
 {
 	volatile unsigned long t=0;
@@ -247,7 +367,9 @@ void main(void)
 	unsigned long int count, f;
 	unsigned char LED_toggle=0;
 
-	CFGCON = 0;
+	DDPCON = 0;
+    CFGCON = 0;
+	Init_pwm();
   
     UART2Configure(115200);  // Configure UART2 for a baud rate of 115200
     ConfigurePins();
@@ -297,11 +419,22 @@ void main(void)
 
 		// Now toggle the pins on/off to see if they are working.
 		// First turn all off:
+		/* I do not think we need this 
 		LATAbits.LATA0 = 0;	
 		LATAbits.LATA1 = 0;			
 		LATBbits.LATB0 = 0;			
 		LATBbits.LATB1 = 0;		
-		LATAbits.LATA2 = 0;			
+		LATAbits.LATA2 = 0;		
+		
+		*/
+		// Set initial motor directions (example: both motors move forward)
+		Motor1_SetDirection(FORWARD);
+		Motor2_SetDirection(FORWARD);
+	
+		// Set both motor speeds to a constant value of 50 (0-255 range)
+		Motor1_SetSpeed(50);
+		Motor2_SetSpeed(50);
+
 		// Now turn on one of the outputs per loop cycle to check
 		switch (LED_toggle++)
 		{

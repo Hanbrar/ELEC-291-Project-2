@@ -299,11 +299,12 @@ void main(void)
 
 		// Now toggle the pins on/off to see if they are working.
 		// First turn all off:
-		LATAbits.LATA0 = 0;	
+		LATAbits.LATA0 = 1;	//pin 2 to high 
 		LATAbits.LATA1 = 0;			
 		LATBbits.LATB0 = 0;			
 		LATBbits.LATB1 = 0;		
 		LATAbits.LATA2 = 0;			
+		
 		// Now turn on one of the outputs per loop cycle to check
 		switch (LED_toggle++)
 		{
