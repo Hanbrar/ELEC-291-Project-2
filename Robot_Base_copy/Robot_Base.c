@@ -52,16 +52,6 @@ volatile int ISR_pwm1=150, ISR_pwm2=150, ISR_cnt=0;
 #define STOP     2
 
 
-// Motor1 direction pins (adjust according to your wiring)
-#define MOTOR1_DIR_A   LATAbits.LATA1  // Motor1 forward control pin (port A, bit 1)
-#define MOTOR1_DIR_B   LATAbits.LATA2  // Motor1 reverse control pin (port A, bit 2)
-
-
-
-// Motor2 direction pins (adjust according to your wiring)
-#define MOTOR2_DIR_A   LATBbits.LATB0  // Motor2 forward control pin (port B, bit 0)
-#define MOTOR2_DIR_B   LATBbits.LATB1  // Motor2 reverse control pin (port B, bit 1)
-
 
 // between 0.6ms and 2.4ms.
 void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
@@ -265,70 +255,102 @@ void PrintFixedPoint (unsigned long number, int decimals)
 /*###########################*/
 /*###########################*/
 
+/*FOUR PWMS declared ready for use*/
 
 void Init_pwm(void)
 {
-    // Map OC1 to PA0 for Motor1 PWM output
-    RPA0Rbits.RPA0R = 0x0005;  // OC1 function
+    // Remap and initialize four PWM outputs for motor control.
+    // Map OC1 to RPA0 for Motor1 PWM output (unchanged)
+    RPA0Rbits.RPA0R = 0x0005;  // OC1 function motor 1
 
-    // Map OC2 to RPB4 for Motor2 PWM output
-    RPB4Rbits.RPB4R = 0x0005;  // OC2 function
+    // Map OC2 to RPB4 for Motor2 PWM output (unchanged)
+    RPB4Rbits.RPB4R = 0x0005;  // OC2 function motor 2
 
-    // Configure OC1 and OC2 in standard PWM mode
-    OC1CON = 0x0006; // Set OC1 for standard PWM mode
-    OC2CON = 0x0006; // Set OC2 for standard PWM mode
+    // --- New mappings for additional motor PWMs ---
+    // Map OC3 to RPA1 for Motor3 PWM output (ensure RPA1 is free)
+    RPA1Rbits.RPA1R = 0x0005;  // OC3 function
 
-    // Configure Timer2 used by both PWM channels
-    T2CONbits.TCKPS = 0;  // Set Timer2 prescaler to 1:1
-    PR2 = (SYSCLK / (PWM_FREQ * 1)) - 1;  // Calculate period for PWM
+    // Map OC4 to RPB0 for Motor4 PWM output (ensure RPB0 is free)
+    RPB0Rbits.RPB0R = 0x0005;  // OC4 function
 
-    // Set initial duty cycles (50% duty cycle using DUTY_CYCLE macro)
+    // Configure OC1, OC2, OC3, and OC4 in standard PWM mode
+    OC1CON = 0x0006; // Standard PWM mode
+    OC2CON = 0x0006;
+    OC3CON = 0x0006;
+    OC4CON = 0x0006;
+
+    // Configure Timer2 used by all PWM channels
+    T2CONbits.TCKPS = 0;  // Prescaler 1:1
+    PR2 = (SYSCLK / PWM_FREQ) - 1;  // Calculate period for PWM
+
+    // Set initial duty cycles (using the defined 50% duty cycle)
     OC1RS = (PR2 + 1) * ((float)DUTY_CYCLE / 100);
     OC2RS = (PR2 + 1) * ((float)DUTY_CYCLE / 100);
+    OC3RS = (PR2 + 1) * ((float)DUTY_CYCLE / 100);
+    OC4RS = (PR2 + 1) * ((float)DUTY_CYCLE / 100);
 
     // Clear Timer2 settings and start Timer2
     T2CON = 0;
     T2CONSET = 0x8000;  // Turn on Timer2
 
     // Enable the Output Compare modules to start PWM generation
-    OC1CONSET = 0x8000; // Enable OC1
-    OC2CONSET = 0x8000; // Enable OC2
+    OC1CONSET = 0x8000;
+    OC2CONSET = 0x8000;
+    OC3CONSET = 0x8000;
+    OC4CONSET = 0x8000;
 }
 
 
 
-
 // Set Motor1 speed using PWM (0-255 range)
-void Motor1_SetSpeed(unsigned char speed)
+void Motor1_SetSpeedforward(unsigned char speed)
 {
     // Scale speed (0 to 255) to timer counts
     OC1RS = (PR2 + 1) * ((float)speed / 256.0);
 }
 
-// Set Motor2 speed using PWM (0-255 range)
-void Motor2_SetSpeed(unsigned char speed)
+// Set Motor1 speed using PWM (0-255 range)
+void Motor1_SetSpeedbackward(unsigned char speed)
 {
     // Scale speed (0 to 255) to timer counts
     OC2RS = (PR2 + 1) * ((float)speed / 256.0);
 }
+
+
+
+// Set Motor2 speed using PWM (0-255 range)
+void Motor2_SetSpeedforward(unsigned char speed)
+{
+    // Scale speed (0 to 255) to timer counts
+    OC3RS = (PR2 + 1) * ((float)speed / 256.0);
+}
+
+// Set Motor2 speed using PWM (0-255 range)	
+void Motor2_SetSpeedbackward(unsigned char speed)
+{
+    // Scale speed (0 to 255) to timer counts
+    OC4RS = (PR2 + 1) * ((float)speed / 256.0);
+}
+
 
 // Set Motor1 direction (FORWARD, BACKWARD, STOP)
 void Motor1_SetDirection(int direction)
 {
     if(direction == FORWARD)
     {
-        MOTOR1_DIR_A = 1;
-        MOTOR1_DIR_B = 0;
+		OC1CONSET = 0x8000;  // Enable PWM for motor 1 forwards
+        OC2CONCLR = 0x8000;  // Disable PWM for motor 1 backwards
     }
     else if(direction == BACKWARD)
     {
-        MOTOR1_DIR_A = 0;
-        MOTOR1_DIR_B = 1;
+		OC1CONCLR = 0x8000;  // Disable PWM for motor 1 forwards
+		OC2CONSET = 0x8000;  // enable PWM for motor 1  backwards
     }
     else  // STOP
     {
-        MOTOR1_DIR_A = 0;
-        MOTOR1_DIR_B = 0;
+		OC1CONCLR = 0x8000;  // Disable PWM for motor 1 forwards
+		OC2CONCLR = 0x8000;  // Disable PWM for motor 1 backwards
+		
     }
 }
 
@@ -337,18 +359,18 @@ void Motor2_SetDirection(int direction)
 {
     if(direction == FORWARD)
     {
-        MOTOR2_DIR_A = 1;
-        MOTOR2_DIR_B = 0;
-    }
+		OC3CONSET = 0x8000;  // Enable PWM for motor 2 forwards
+		OC4CONCLR = 0x8000;  // Disable PWM for motor 2 backwards
+	}
     else if(direction == BACKWARD)
     {
-        MOTOR2_DIR_A = 0;
-        MOTOR2_DIR_B = 1;
+		OC3CONCLR = 0x8000;// Disable PWM for motor 2 forwards
+		OC4CONSET = 0x8000;  // Enable PWM for motor 2 backwards
     }
     else  // STOP
     {
-        MOTOR2_DIR_A = 0;
-        MOTOR2_DIR_B = 0;
+		OC3CONCLR = 0x8000;  // Disable PWM for motor 2 forwards
+		OC4CONCLR = 0x8000;  // Disable PWM for motor 2 forwards
     }
 }
 
@@ -362,10 +384,11 @@ void main(void)
 {
 	volatile unsigned long t=0;
     int adcval;
-    long int v,perimeter1,perimeter2;
-	float up,dowm,left,right;
+    long int v;
 	unsigned long int count, f;
 	unsigned char LED_toggle=0;
+	float up,down,left,right;
+
 	
 	DDPCON = 0;
     CFGCON = 0;
@@ -389,8 +412,8 @@ void main(void)
     	adcval = ADCRead(4); // note that we call pin AN4 (RB2) by it's analog number
 		uart_puts("ADC[4]=0x");
 		PrintNumber(adcval, 16, 3);
-		uart_puts(", Perimeter1=");
-		perimeter detector=(adcval*3290L)/1023L; // 3.290 is VDD
+		uart_puts(", V=");
+		v=(adcval*3290L)/1023L; // 3.290 is VDD
 		PrintFixedPoint(v, 3);
 		uart_puts("V ");
 
@@ -436,8 +459,11 @@ void main(void)
 		Motor2_SetDirection(FORWARD);
 	
 		// Set both motor speeds to a constant value of 50 (0-255 range)
-		Motor1_SetSpeed(128);
-		Motor2_SetSpeed(128);
+		Motor1_SetSpeedforward(255);
+		Motor1_SetSpeedbackward(255);
+		Motor2_SetSpeedforward(255);
+		Motor2_SetSpeedbackward(255);
+
 
 		// Now turn on one of the outputs per loop cycle to check
 		switch (LED_toggle++)

@@ -271,7 +271,13 @@ void ReceptionOff (void)
 
 void main(void)
 {
+    // Receive From Master
 	char buff[80];
+    char *token;
+    int values[4] = {0,0,0,0}; // To store extracted digits
+
+    int i = 0;
+
     int cnt=0;
     char c;
     
@@ -307,23 +313,52 @@ void main(void)
 	cnt=0;
 	while(1)
 	{	
+        up = 0;
+        down = 0;
+        left = 0;
+        right = 0;
+
 		if(U1STAbits.URXDA) // Something has arrived
 		{
 			c=U1RXREG;
 			if(c=='!') // Master is sending message
 			{
-				//SerialReceive1_timeout(buff, sizeof(buff)-1);
 				SerialReceive1(buff, sizeof(buff)-1);
-				//if(strlen(buff)==7)
-				//{
-					printf("Master says: %s\r\n", buff);
-				//}
-				//else
-				//{
-				//	// Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
-				//	ClearFIFO();
-				//	printf("*** BAD MESSAGE ***: %s\r\n", buff);
-				//}				
+
+                // split the received message from Master into integers
+                i = 0;
+                token = strtok(buff, " ");
+                while (token != NULL && i < 4) {
+                    values[i] = atoi(token);  // Convert token to integer
+                    token = strtok(NULL, " ");
+                    i++;
+                }                
+                up = values[0];
+                down = values[1];
+                left = values[2];
+                right = values[3];
+                
+                // Move Moter According to Remote
+				if(strlen(buff)==7) {   // if instruciton is valid
+
+                    if (up == 1) {
+                        printf("UP");
+                    }
+                    if (down == 1) {
+                        printf("UP");
+                    }
+                    if (up == 1) {
+                        printf("UP");
+                    }
+                    if (up == 1) {
+                        printf("UP");
+                    }
+				}
+				else{                   // if instruction is invalid
+					// Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
+					ClearFIFO();
+					printf("*** BAD MESSAGE ***: %s\r\n", buff);
+				}				
 			}
 			else if(c=='@') // Master wants slave data
 			{

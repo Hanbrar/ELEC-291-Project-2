@@ -78,12 +78,9 @@ int main(void)
     // loop indefinitely
 	while (1)
 	{
-		t++;
-		if(t==20000)
-		{
-			t = 0;
-			Set_pwm(myduty++);
-		}
+		
+		Set_pwm(255);
+	
 	}
  
     return 1;
