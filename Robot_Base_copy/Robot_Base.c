@@ -362,11 +362,11 @@ void main(void)
 {
 	volatile unsigned long t=0;
     int adcval;
-    long int v;
+    long int v,perimeter1,perimeter2;
 	float up,dowm,left,right;
 	unsigned long int count, f;
 	unsigned char LED_toggle=0;
-
+	
 	DDPCON = 0;
     CFGCON = 0;
 	Init_pwm();
@@ -389,10 +389,12 @@ void main(void)
     	adcval = ADCRead(4); // note that we call pin AN4 (RB2) by it's analog number
 		uart_puts("ADC[4]=0x");
 		PrintNumber(adcval, 16, 3);
-		uart_puts(", V=");
-		v=(adcval*3290L)/1023L; // 3.290 is VDD
+		uart_puts(", Perimeter1=");
+		perimeter detector=(adcval*3290L)/1023L; // 3.290 is VDD
 		PrintFixedPoint(v, 3);
 		uart_puts("V ");
+
+
 
 		adcval=ADCRead(5);
 		uart_puts("ADC[5]=0x");
@@ -402,6 +404,8 @@ void main(void)
 		PrintFixedPoint(v, 3);
 		uart_puts("V ");
 
+		
+		//Remember to copy over metal detector code
 		count=GetPeriod(100);
 		if(count>0)
 		{
