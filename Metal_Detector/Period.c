@@ -133,8 +133,8 @@ void main(void)
 	float T, f;
     float r;
     float ct,c1,c2;
-    c1=0.0000001;
-    c2=0.00000099;
+    c1=0.00000001; //10nf
+    c2 = 0.0000001; //100nf
     float Inductor;
     DDPCON = 0;
 	
@@ -152,6 +152,7 @@ void main(void)
     
     while(1)
     {
+        //Connect to pin4
         //We will need two frequencies to measure the two different inductors
 		count=GetPeriod(100,PIN_PERIOD_1);
 		if(count>0)
@@ -163,7 +164,8 @@ void main(void)
             /*##########################*/
             //This is where in the code where we will measure inductor that will
             //directly tell us if metal content is present 
-			printf("Inductor=%.2fH\r", Inductor);
+
+            printf("Inductor=%f\r\n", Inductor);
 		}
 		else
 		{
@@ -171,5 +173,6 @@ void main(void)
 		}
 		fflush(stdout); // GCC peculiarities: need to flush stdout to get string out without a '\n'
 		waitms(200);
+        waitms(200);
     }
 }

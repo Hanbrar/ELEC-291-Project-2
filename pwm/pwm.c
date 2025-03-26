@@ -82,7 +82,7 @@ int main(void)
 		if(t==20000)
 		{
 			t = 0;
-			Set_pwm(128);
+			Set_pwm(myduty++);
 		}
 	}
  

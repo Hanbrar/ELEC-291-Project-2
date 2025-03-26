@@ -432,8 +432,8 @@ void main(void)
 		Motor2_SetDirection(FORWARD);
 	
 		// Set both motor speeds to a constant value of 50 (0-255 range)
-		Motor1_SetSpeed(50);
-		Motor2_SetSpeed(50);
+		Motor1_SetSpeed(128);
+		Motor2_SetSpeed(128);
 
 		// Now turn on one of the outputs per loop cycle to check
 		switch (LED_toggle++)
