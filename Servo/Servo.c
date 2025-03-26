@@ -161,7 +161,8 @@ void main (void)
 	
 	while (1)
 	{
-    	printf("New pulse width: ");
+    	/*
+	printf("New pulse width: ");
     	fflush(stdout);
     	SerialReceive(buf, sizeof(buf)-1); // wait here until data is received
  
@@ -176,6 +177,27 @@ void main (void)
         {
         	printf("%d is out of the valid range\r\n", pw);
         }
+	*/
+	// Change the servo PWM signals
+	if (ISR_pwm1<200)
+	{
+			ISR_pwm1++;
+	}
+	else
+	{
+			ISR_pwm1=100;	
+	}
+
+	if (ISR_pwm2>100)
+		{
+			ISR_pwm2--;
+		}
+		else
+		{
+			ISR_pwm2=200;	
+		}
+
+		waitms(2000);	
 	}
 }
 
