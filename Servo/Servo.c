@@ -14,12 +14,26 @@
 #define FREQ 100000L // We need the ISR for timer 1 every 10 us
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
+volatile int ISR_pwm1=150, ISR_pwm2=150;
 volatile int ISR_pw=100, ISR_cnt=0, ISR_frc;
-volatile int ISR_pwm1 = 50, ISR_pwm2 = 200;
 
 // The Interrupt Service Routine for timer 1 is used to generate one or more standard
 // hobby servo signals.  The servo signal has a fixed period of 20ms and a pulse width
 // between 0.6ms and 2.4ms.
+void wait_1ms(void)
+{
+    unsigned int ui;
+    _CP0_SET_COUNT(0); // resets the core timer count
+
+    // get the core timer count
+    while ( _CP0_GET_COUNT() < (SYSCLK/(2*1000)) );
+}
+
+void waitms(int len)
+{
+	while(len--) wait_1ms();
+}
+
 void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 {
 	IFS0CLR=_IFS0_T1IF_MASK; // Clear timer 1 interrupt flag, bit 4 of IFS0
@@ -163,7 +177,7 @@ void main (void)
 	while (1)
 	{
     	/*
-	printf("New pulse width: ");
+		printf("New pulse width: ");
     	fflush(stdout);
     	SerialReceive(buf, sizeof(buf)-1); // wait here until data is received
  
@@ -178,18 +192,19 @@ void main (void)
         {
         	printf("%d is out of the valid range\r\n", pw);
         }
-	*/
-	// Change the servo PWM signals
-	if (ISR_pwm1<200)
-	{
-			ISR_pwm1++;
-	}
-	else
-	{
-			ISR_pwm1=100;	
-	}
+		*/
 
-	if (ISR_pwm2>100)
+		// Change the servo PWM signals
+		if (ISR_pwm1<200)
+		{
+			ISR_pwm1++;
+		}
+		else
+		{
+			ISR_pwm1=100;	
+		}
+
+		if (ISR_pwm2>100)
 		{
 			ISR_pwm2--;
 		}
@@ -198,7 +213,9 @@ void main (void)
 			ISR_pwm2=200;	
 		}
 
-		waitms(2000);	
+		waitms(2000);
 	}
+
+
 }
 

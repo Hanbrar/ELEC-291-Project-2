@@ -312,11 +312,8 @@ void main(void)
 		}	
 
 		// Change the servo PWM signals
-        ISR_pwm1 = 50;
-        ISR_pwm2 = 100;
-		ISR_pwm3 = 50;
-        ISR_pwm4 = 75;
-		
+        ISR_pwm1 = 4000;
+        ISR_pwm2 = 4000;
 		//if (ISR_pwm1<8000)
 		//{
 		//	ISR_pwm1++;
