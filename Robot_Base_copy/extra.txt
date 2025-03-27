@@ -35,7 +35,7 @@
 
 // Defines
 #define SYSCLK 40000000L
-#define FREQ 10000L // We need the ISR for timer 1 every 10 us
+#define FREQ 100000L // We need the ISR for timer 1 every 10 us
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
 volatile int ISR_pwm1=150, ISR_pwm2=150, ISR_cnt=0;
@@ -71,7 +71,7 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 	{
 		ISR_cnt=0; // 2000 * 10us=20ms
 		LATAbits.LATA3 = 1;
-		LATAbits.LATA2 = 1; // for now change to pin 9
+		LATBbits.LATB4 = 1;
 	}
 }
 
@@ -214,10 +214,6 @@ void ConfigurePins(void)
 	TRISBbits.TRISB2 = 0;   // Set RB2 as an output
 	ANSELBbits.ANSB3 = 0;   // Disable analog functionality on RB3
 	TRISBbits.TRISB3 = 0;   // Set RB3 as an output
-	
-	ANSELBbits.ANSB0 = 0;  // Make sure RB0 is in digital mode
-	TRISBbits.TRISB0 = 0;  // Output
-
     
 	// Configure digital input pin to measure signal period
 	ANSELB &= ~(1<<5); // Set RB5 as a digital I/O (pin 14 of DIP28)
@@ -234,8 +230,6 @@ void ConfigurePins(void)
 	TRISAbits.TRISA1 = 0; // pin  3 of DIP28
 	TRISBbits.TRISB0 = 0; // pin  4 of DIP28
 	TRISBbits.TRISB1 = 0; // pin  5 of DIP28
-	TRISBbits.TRISB2 = 0; // pin  6 of DIP28
-	ANSELBbits.ANSB2 = 0; // Disable analog functionality on RB2
 	TRISAbits.TRISA2 = 0; // pin  9 of DIP28
 	TRISAbits.TRISA3 = 0; // pin 10 of DIP28
 	TRISBbits.TRISB4 = 0; // pin 11 of DIP28
@@ -363,18 +357,16 @@ void Init_pwm(void)
 
     // Map OC2 to RPB4 for Motor1 PWM output (unchanged)
 	 //Motor 1 Backwards
-	RPB2Rbits.RPB2R = 0x0006;  // OC2 function motor 2
+    RPB4Rbits.RPB4R = 0x0005;  // OC2 function motor 2
 
 	// --- New mappings for additional motor PWMs ---
 	// Map OC3 to RPB2 for Motor2 PWM output (pin 6)
 	 //Motor 2 Forwards
-	 // 					  // OC3 function 
-	 RPB0Rbits.RPB0R = 0x7; // Map OC3 to RB0 (pin4)
-  // 0x7 = OC3
+	RPB2Rbits.RPB2R = 0x0005;  // OC3 function 
 
     // Map OC4 to RPB0 for Motor2 PWM output (ensure RPB0 is free)
 	//Motor 2 Backwards
-    RPB0Rbits.RPB0R = 0x0008;  // OC4 function
+    RPB0Rbits.RPB0R = 0x0005;  // OC4 function
 
     // Configure OC1, OC2, OC3, and OC4 in standard PWM mode
     OC1CON = 0x0006; // Standard PWM mode
@@ -664,17 +656,9 @@ void main(void)
 		*/
 		// Set both motor speeds to a constant value of 50 (0-255 range)
 		Motor1_SetSpeedforward(255);
-
-		Motor1_SetSpeedbackward(0);
-	
-		Motor2_SetSpeedforward(128);
-
-		Motor2_SetSpeedbackward(0);
-
-		Motor1_SetDirection(FORWARD);
-		Motor2_SetDirection(FORWARD);
-
-	
+		Motor1_SetSpeedbackward(255);
+		Motor2_SetSpeedforward(150);
+		Motor2_SetSpeedbackward(255);
 
 
 		// Now turn on one of the outputs per loop cycle to check
