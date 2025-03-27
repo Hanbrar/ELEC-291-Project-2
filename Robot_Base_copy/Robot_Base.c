@@ -258,7 +258,13 @@ void PrintFixedPoint (unsigned long number, int decimals)
 /*FOUR PWMS declared ready for use*/
 
 void Init_pwm(void)
-{
+{	
+	/*
+	A0-2 pin  - Motor 1 
+	B4-11 pin - Motor 1
+	A1-3 pin  - Motor 2
+	B0-4 pin  - Motor 2
+	*/
     // Remap and initialize four PWM outputs for motor control.
     // Map OC1 to RPA0 for Motor1 PWM output (unchanged)
     RPA0Rbits.RPA0R = 0x0005;  // OC1 function motor 1

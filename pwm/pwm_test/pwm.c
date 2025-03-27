@@ -45,7 +45,7 @@ void Init_pwm (void)
 	T2CONbits.TCKPS=0x0; // Set pre-scaler to 1
 	
     // A write to PRy configures the PWM frequency
-    // PR = [FPB / (PWM Frequency * TMR Prescale Value)] – 1
+    // PR = [FPB / (PWM Frequency * TMR Prescale Value)] ï¿½ 1
     PR2 = (SYSCLK / (PWM_FREQ*1)) - 1;
  
     // A write to OCxRS configures the duty cycle
@@ -73,14 +73,9 @@ int main(void)
 	Init_pwm();
 
     // loop indefinitely
-	while (1)
-	{
-		t++;
-		if(t==20000)
-		{
-			t = 0;
-			Set_pwm(myduty++);
-		}
+	while(1){
+
+		Set_pwm(255);
 	}
  
     return 1;
