@@ -173,7 +173,7 @@ void main (void)
     LATBbits.LATB2 = 0;     // Initialize low
 
     // Configure RA2 as digital output for PWM2
-    ANSELBbits.ANSB5 = 0;     // Turn off analog on RB5
+    // ANSELBbits.ANSB5 = 0;     // Turn off analog on RB5
     TRISBbits.TRISB5 = 0;     // Set RB5 as output
     LATBbits.LATB5 = 0;       // Initialize low
 	
