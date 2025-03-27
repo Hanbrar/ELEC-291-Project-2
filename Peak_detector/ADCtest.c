@@ -87,7 +87,7 @@ int ADCRead(char analogPIN)
 void main(void)
 {
 	volatile unsigned long t=0;
-    int adcval;
+    int adcval1,adcval2;
     float perimeter1,perimeter2;
 
 	CFGCON = 0;
@@ -96,10 +96,12 @@ void main(void)
  
  // Configure pins as analog inputs
  ANSELAbits.ANSA1 = 1;   // set RA1 (AN1, pin 3 of DIP28) as analog pin
- TRISAbits.TRISA1 = 1;   // set RA1 as an input
+ TRISAbits.TRISA1 = 1;   // set RA1 as an input -This for one of the perimeter check inductors 
  
- TRISBbits.TRISB6 = 0;
- LATBbits.LATB6 = 0;    
+ ANSELAbits.ANSA0 = 1;   // Set RA0 (AN0, pin 2 of DIP28) as an analog pin
+ TRISAbits.TRISA0 = 1;   // Set RA0 as an input -This for one of the perimeter check inductors 
+ 
+ 
  INTCONbits.MVEC = 1;
     ADCConf(); // Configure ADC
  
@@ -107,9 +109,11 @@ void main(void)
     printf("*** PIC32 ADC test. Connect voltage to pin AN4 (pin 6) ***\r\n");
 	while(1)
 	{
-    	adcval = ADCRead(1); // note that we call pin AN4 (RB2) by it's analog number
-    	perimeter1=adcval*3.3/1023.0;
-    	printf("AN4=0x%04x, %.3fV\r", adcval, perimeter1);
+    	adcval1 = ADCRead(1); // note that we call pin AN4 (RB2) by it's analog number
+    	perimeter1=adcval1*3.3/1023.0;
+        adcval2= ADCRead(0);
+        perimeter2=adcval2*3.3/1023.0;
+    	printf("AN4=0x%04x, %.3fV,AN0=0x%04x, %.3fV\r", adcval1, perimeter1,adcval2,perimeter2);
     	fflush(stdout); // Makes the printf() above to send without a '\n' at the end
 		t = 0;
 		delayms(500);
