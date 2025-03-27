@@ -38,24 +38,40 @@
 #define FREQ 100000L // We need the ISR for timer 1 every 10 us
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
-volatile int ISR_pwm1=150, ISR_pwm2=150, ISR_cnt=0;
+volatile int ISR_pwm1=150, ISR_pwm2=150, ISR_pwm3=150, ISR_pwm4=150, ISR_cnt=0;
 
 // The Interrupt Service Routine for timer 1 is used to generate one or more standard
 // hobby servo signals.  The servo signal has a fixed period of 20ms and a pulse width
 // between 0.6ms and 2.4ms.
 void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 {
-    IFS0CLR = _IFS0_T1IF_MASK; // Clear timer 1 interrupt flag
+	IFS0CLR=_IFS0_T1IF_MASK; // Clear timer 1 interrupt flag, bit 4 of IFS0
 
-    ISR_cnt++;
-    if (ISR_cnt >= ISR_pwm1) LATAbits.LATA3 = 0; // Turn off RA3 (PWM output)
-    if (ISR_cnt >= ISR_pwm2) LATBbits.LATB4 = 0; // Turn off RB4 (PWM output)
+	ISR_cnt++;
 
-    if (ISR_cnt >= 4000) // Reset at 10kHz (4000 * 1/40MHz = 100µs)
+    // Turn off pins when ISR_cnt matches their respective PWM values
+    if (ISR_cnt == ISR_pwm2) {
+        LATAbits.LATA3 = 0; // Turn off RA3 (PWM output, pin 10)
+    }
+    if (ISR_cnt == ISR_pwm3) {
+        LATBbits.LATB4 = 0; // Turn off RB4 (PWM output, pin 11)
+    }
+    if (ISR_cnt == ISR_pwm1) {
+        LATAbits.LATA2 = 0; // Turn off RA2 (PWM output, pin 9)
+    }
+    if (ISR_cnt == ISR_pwm4) {
+        LATAbits.LATA4 = 0; // Turn off RA4 (PWM output, pin 12)
+    }
+
+    // Reset ISR_cnt and turn on all pins at the start of the PWM cycle
+    if (ISR_cnt >= 100) // 2000 * 10us = 20ms
     {
         ISR_cnt = 0;
-        LATAbits.LATA3 = 1; // Turn on RA3 (PWM output)
-        LATBbits.LATB4 = 1; // Turn on RB4 (PWM output)
+
+        LATAbits.LATA3 = 1; // Turn on RA3 (PWM output, pin 10)
+        LATBbits.LATB4 = 1; // Turn on RB4 (PWM output, pin 11)
+        LATAbits.LATA2 = 1; // Turn on RA2 (PWM output, pin 9)
+        LATAbits.LATA4 = 1; // Turn on RA4 (PWM output, pin 12)
     }
 }
 
@@ -217,6 +233,8 @@ void ConfigurePins(void)
 	TRISAbits.TRISA2 = 0; // pin  9 of DIP28
 	TRISAbits.TRISA3 = 0; // pin 10 of DIP28
 	TRISBbits.TRISB4 = 0; // pin 11 of DIP28
+	TRISAbits.TRISA4 = 0; // pin 12 of DIP28
+	
 	INTCONbits.MVEC = 1;
 }
 
@@ -291,42 +309,14 @@ void main(void)
 		else
 		{
 			uart_puts("NO SIGNAL                     \r");
-		}
-
-		// Now toggle the pins on/off to see if they are working.
-		// First turn all off:
-		LATAbits.LATA0 = 1;	//pin 2 to high 
-		LATAbits.LATA1 = 0;			
-		LATBbits.LATB0 = 0;			
-		LATBbits.LATB1 = 0;		
-		LATAbits.LATA2 = 0;			
-		
-		// Now turn on one of the outputs per loop cycle to check
-		switch (LED_toggle++)
-		{
-			case 0:
-				LATAbits.LATA0 = 1;
-				break;
-			case 1:
-				LATAbits.LATA1 = 1;
-				break;
-			case 2:
-				LATBbits.LATB0 = 1;
-				break;
-			case 3:
-				LATBbits.LATB1 = 1;
-				break;
-			case 4:
-				LATAbits.LATA2 = 1;
-				break;
-			default:
-				break;
-		}
-		if(LED_toggle>4) LED_toggle=0;
+		}	
 
 		// Change the servo PWM signals
-        ISR_pwm1 = 4000;
-        ISR_pwm2 = 4000;
+        ISR_pwm1 = 1;
+        ISR_pwm2 = 100;
+		ISR_pwm3 = 1;
+        ISR_pwm4 = 50;
+		
 		//if (ISR_pwm1<8000)
 		//{
 		//	ISR_pwm1++;
