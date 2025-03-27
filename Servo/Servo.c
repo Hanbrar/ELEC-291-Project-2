@@ -39,14 +39,24 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 	IFS0CLR=_IFS0_T1IF_MASK; // Clear timer 1 interrupt flag, bit 4 of IFS0
 
 	ISR_cnt++;
-	if(ISR_cnt<ISR_pw)
+	if(ISR_cnt<ISR_pwm1)
 	{
-		LATBbits.LATB6 = 1;
+		LATBbits.LATB2 = 1;
 	}
 	else
 	{
-		LATBbits.LATB6 = 0;
+		LATBbits.LATB2 = 0;
 	}
+
+	if(ISR_cnt<ISR_pwm2)
+	{
+		LATBbits.LATA2 = 1;
+	}
+	else
+	{
+		LATBbits.LATA2 = 0;
+	}
+
 	if(ISR_cnt>=2000)
 	{
 		ISR_cnt=0; // 2000 * 10us=20ms
@@ -154,7 +164,7 @@ void main (void)
     char buf[32];
     int pw;
     
-    DDPCON = 0;
+	DDPCON = 0;
     CFGCON = 0;
 
     // Configure RB2 as digital output for PWM1
@@ -182,26 +192,7 @@ void main (void)
 	
 	while (1)
 	{
-    	/*
-		printf("New pulse width: ");
-    	fflush(stdout);
-    	SerialReceive(buf, sizeof(buf)-1); // wait here until data is received
- 
-    	printf("\n");
-    	fflush(stdout);
-	    pw=atoi(buf);
-	    if( (pw>=60) && (pw<=240) )
-	    {
-	    	ISR_pw=pw;
-        }
-        else
-        {
-        	printf("%d is out of the valid range\r\n", pw);
-        }
-		*/
-
-		// Change the servo PWM signals
-		if (ISR_pwm1<200)
+    	if (ISR_pwm1<200)
 		{
 			ISR_pwm1++;
 		}
@@ -221,7 +212,5 @@ void main (void)
 
 		waitms(2000);
 	}
-
-
 }
 
