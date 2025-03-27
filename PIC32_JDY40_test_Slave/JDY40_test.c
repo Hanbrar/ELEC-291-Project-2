@@ -274,7 +274,7 @@ void main(void)
     // Receive From Master
 	char buff[80];
     char *token;
-    int values[4] = {0,0,0,0}; // To store extracted digits
+    int values[7] = {0,0,0,0,0,0,0}; // To store extracted digits
 
     int i = 0;
 
@@ -317,6 +317,9 @@ void main(void)
         down = 0;
         left = 0;
         right = 0;
+        button_auto = 0;
+        button_manual = 0;
+        button_coin = 0;
 
 		if(U1STAbits.URXDA) // Something has arrived
 		{
@@ -328,7 +331,7 @@ void main(void)
                 // split the received message from Master into integers
                 i = 0;
                 token = strtok(buff, " ");
-                while (token != NULL && i < 4) {
+                while (token != NULL && i < 7) {
                     values[i] = atoi(token);  // Convert token to integer
                     token = strtok(NULL, " ");
                     i++;
@@ -337,21 +340,33 @@ void main(void)
                 down = values[1];
                 left = values[2];
                 right = values[3];
+                button_auto = value[4];
+                button_manual = value[5];
+                button_coin = value[6];
                 
                 // Move Moter According to Remote
-				if(strlen(buff)==7) {   // if instruciton is valid
+				if(strlen(buff)==13) {   // if instruciton is valid
 
                     if (up == 1) {
                         printf("UP");
                     }
                     if (down == 1) {
-                        printf("UP");
+                        printf("DOWN");
                     }
-                    if (up == 1) {
-                        printf("UP");
+                    if (left == 1) {
+                        printf("LEFT");
                     }
-                    if (up == 1) {
-                        printf("UP");
+                    if (right == 1) {
+                        printf("RIGHT");
+                    }
+                    if (button_auto == 1){
+                        printf("AUTO");
+                    }
+                    if (button_manual == 1){
+                        printf("MANUAL");
+                    }
+                    if (button_coin == 1){
+                        printf("PICK UP THE COIN");
                     }
 				}
 				else{                   // if instruction is invalid
