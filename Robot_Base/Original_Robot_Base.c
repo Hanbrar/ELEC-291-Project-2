@@ -2,7 +2,7 @@
 #include <sys/attribs.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+
 
 /* Pinout for DIP28 PIC32MX130:
                                           --------
@@ -42,17 +42,6 @@ volatile int ISR_pwm1=150, ISR_pwm2=150, ISR_cnt=0;
 
 // The Interrupt Service Routine for timer 1 is used to generate one or more standard
 // hobby servo signals.  The servo signal has a fixed period of 20ms and a pulse width
-
-#define PWM_FREQ    200000L       // 200 kHz PWM frequency
-#define DUTY_CYCLE  50  
-
-// Motor direction definitions
-#define FORWARD  0
-#define BACKWARD 1
-#define STOP     2
-
-
-
 // between 0.6ms and 2.4ms.
 void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 {
@@ -249,247 +238,18 @@ void PrintFixedPoint (unsigned long number, int decimals)
 
 // In order to keep this as nimble as possible, avoid
 // using floating point or printf() on any of its forms!
-
-/*Serial Data Sending Code*/
-
-/*#####################*/
-
-void delayms(int len)
-{
-    while(len--) wait_1ms();
-}
-
-int SerialTransmit1(const char *buffer)
-{
-    unsigned int size = strlen(buffer);
-    while(size)
-    {
-        while (U1STAbits.UTXBF);
-        U1TXREG = *buffer;
-        buffer++;
-        size--;
-    }
-    while(!U1STAbits.TRMT); // wait until transmission is complete
-    return 0;
-}
-
-int SerialReceive1(char *buffer, unsigned int max_size)
-{
-    unsigned int num_char = 0;
-    while(num_char < max_size)
-    {
-        while(!U1STAbits.URXDA); // wait for data
-        *buffer = U1RXREG;
-        if (*buffer == '\n')
-        {
-            *buffer = '\0';
-            break;
-        }
-        buffer++;
-        num_char++;
-    }
-    return num_char;
-}
-
-int SerialReceive1_timeout(char *buffer, unsigned int max_size)
-{
-    unsigned int num_char = 0;
-    int timeout_cnt;
-    while(num_char < max_size)
-    {
-        timeout_cnt = 0;
-        while(1)
-        {
-            if (U1STAbits.URXDA)
-            {
-                timeout_cnt = 0;
-                *buffer = U1RXREG;
-                break;
-            }
-            if (++timeout_cnt == 200)
-            {
-                *buffer = '\n';
-                break;
-            }
-            delayms(100);
-        }
-        if(*buffer == '\n')
-        {
-            *buffer = '\0';
-            break;
-        }
-        buffer++;
-        num_char++;
-    }
-    return num_char;
-}
-
-void ClearFIFO(void)
-{
-    unsigned char c;
-    U1STA = 0x1400;  // clear FIFO and re-enable TX/RX
-    while (U1STAbits.URXDA)
-        c = U1RXREG;
-}
-
-
-/*###########################*/
-
-/* PWM Motor setup functions*/
-
-
-/*###########################*/
-
-/*FOUR PWMS declared ready for use*/
-
-void Init_pwm(void)
-{	
-	/*
-	A0-2 pin  - Motor 1 
-	B4-11 pin - Motor 1
-	A1-3 pin  - Motor 2
-	B0-4 pin  - Motor 2
-	*/
-    // Remap and initialize four PWM outputs for motor control.
-    // Map OC1 to RPA0 for Motor1 PWM output (unchanged)
-    RPA0Rbits.RPA0R = 0x0005;  // OC1 function motor 1
-
-    // Map OC2 to RPB4 for Motor2 PWM output (unchanged)
-    RPB4Rbits.RPB4R = 0x0005;  // OC2 function motor 2
-
-    // --- New mappings for additional motor PWMs ---
-    // Map OC3 to RPA1 for Motor3 PWM output (ensure RPA1 is free)
-    RPA1Rbits.RPA1R = 0x0005;  // OC3 function
-
-    // Map OC4 to RPB0 for Motor4 PWM output (ensure RPB0 is free)
-    RPB0Rbits.RPB0R = 0x0005;  // OC4 function
-
-    // Configure OC1, OC2, OC3, and OC4 in standard PWM mode
-    OC1CON = 0x0006; // Standard PWM mode
-    OC2CON = 0x0006;
-    OC3CON = 0x0006;
-    OC4CON = 0x0006;
-
-    // Configure Timer2 used by all PWM channels
-    T2CONbits.TCKPS = 0;  // Prescaler 1:1
-    PR2 = (SYSCLK / PWM_FREQ) - 1;  // Calculate period for PWM
-
-    // Set initial duty cycles (using the defined 50% duty cycle)
-    OC1RS = (PR2 + 1) * ((float)DUTY_CYCLE / 100);
-    OC2RS = (PR2 + 1) * ((float)DUTY_CYCLE / 100);
-    OC3RS = (PR2 + 1) * ((float)DUTY_CYCLE / 100);
-    OC4RS = (PR2 + 1) * ((float)DUTY_CYCLE / 100);
-
-    // Clear Timer2 settings and start Timer2
-    T2CON = 0;
-    T2CONSET = 0x8000;  // Turn on Timer2
-
-    // Enable the Output Compare modules to start PWM generation
-    OC1CONSET = 0x8000;
-    OC2CONSET = 0x8000;
-    OC3CONSET = 0x8000;
-    OC4CONSET = 0x8000;
-}
-
-
-
-// Set Motor1 speed using PWM (0-255 range)
-void Motor1_SetSpeedforward(unsigned char speed)
-{
-    // Scale speed (0 to 255) to timer counts
-    OC1RS = (PR2 + 1) * ((float)speed / 256.0);
-}
-
-// Set Motor1 speed using PWM (0-255 range)
-void Motor1_SetSpeedbackward(unsigned char speed)
-{
-    // Scale speed (0 to 255) to timer counts
-    OC2RS = (PR2 + 1) * ((float)speed / 256.0);
-}
-
-
-
-// Set Motor2 speed using PWM (0-255 range)
-void Motor2_SetSpeedforward(unsigned char speed)
-{
-    // Scale speed (0 to 255) to timer counts
-    OC3RS = (PR2 + 1) * ((float)speed / 256.0);
-}
-
-// Set Motor2 speed using PWM (0-255 range)	
-void Motor2_SetSpeedbackward(unsigned char speed)
-{
-    // Scale speed (0 to 255) to timer counts
-    OC4RS = (PR2 + 1) * ((float)speed / 256.0);
-}
-
-
-// Set Motor1 direction (FORWARD, BACKWARD, STOP)
-void Motor1_SetDirection(int direction)
-{
-    if(direction == FORWARD)
-    {
-		OC1CONSET = 0x8000;  // Enable PWM for motor 1 forwards
-        OC2CONCLR = 0x8000;  // Disable PWM for motor 1 backwards
-    }
-    else if(direction == BACKWARD)
-    {
-		OC1CONCLR = 0x8000;  // Disable PWM for motor 1 forwards
-		OC2CONSET = 0x8000;  // enable PWM for motor 1  backwards
-    }
-    else  // STOP
-    {
-		OC1CONCLR = 0x8000;  // Disable PWM for motor 1 forwards
-		OC2CONCLR = 0x8000;  // Disable PWM for motor 1 backwards
-		
-    }
-}
-
-// Set Motor2 direction (FORWARD, BACKWARD, STOP)
-void Motor2_SetDirection(int direction)
-{
-    if(direction == FORWARD)
-    {
-		OC3CONSET = 0x8000;  // Enable PWM for motor 2 forwards
-		OC4CONCLR = 0x8000;  // Disable PWM for motor 2 backwards
-	}
-    else if(direction == BACKWARD)
-    {
-		OC3CONCLR = 0x8000;// Disable PWM for motor 2 forwards
-		OC4CONSET = 0x8000;  // Enable PWM for motor 2 backwards
-    }
-    else  // STOP
-    {
-		OC3CONCLR = 0x8000;  // Disable PWM for motor 2 forwards
-		OC4CONCLR = 0x8000;  // Disable PWM for motor 2 forwards
-    }
-}
-
-
-
-/*###########################*/
-/*###########################*/
-
-
 void main(void)
 {
-	char buff[80];
-    char *token;
-    int values[7] = {0};
-    int i = 0, cnt = 0;
-    char c;
-    int up = 0, down = 0, left = 0, right = 0;
-    int button_auto = 0, button_manual = 0, button_coin = 0;
-    
-    // Variables for Robot Base functionality
+	volatile unsigned long t=0;
     int adcval;
     long int v;
-    unsigned long count, f;
-    unsigned char LED_toggle = 0;
+	unsigned long int count, f;
+	unsigned char LED_toggle=0;
+	float up,down,left,right;
+
 	
-	DDPCON = 0;
-    CFGCON = 0;
-	Init_pwm();
+
+	CFGCON = 0;
   
     UART2Configure(115200);  // Configure UART2 for a baud rate of 115200
     ConfigurePins();
@@ -514,8 +274,6 @@ void main(void)
 		PrintFixedPoint(v, 3);
 		uart_puts("V ");
 
-
-
 		adcval=ADCRead(5);
 		uart_puts("ADC[5]=0x");
 		PrintNumber(adcval, 16, 3);
@@ -524,8 +282,6 @@ void main(void)
 		PrintFixedPoint(v, 3);
 		uart_puts("V ");
 
-		
-		//Remember to copy over metal detector code
 		count=GetPeriod(100);
 		if(count>0)
 		{
@@ -543,108 +299,12 @@ void main(void)
 
 		// Now toggle the pins on/off to see if they are working.
 		// First turn all off:
-		/* I do not think we need this 
-		LATAbits.LATA0 = 0;	
+		LATAbits.LATA0 = 1;	//pin 2 to high 
 		LATAbits.LATA1 = 0;			
 		LATBbits.LATB0 = 0;			
 		LATBbits.LATB1 = 0;		
-		LATAbits.LATA2 = 0;		
+		LATAbits.LATA2 = 0;			
 		
-		*/
-		// Set initial motor directions (example: both motors move forward)
-
-		//Sets to orientation of the robot in what direction it should move 
-
-
-		 // --- JDY40 Test Section ---
-		 if(U1STAbits.URXDA)
-		 {
-			 c = U1RXREG;
-			 if(c == '!')
-			 {
-				 SerialReceive1(buff, sizeof(buff)-1);
-				 i = 0;
-				 token = strtok(buff, " ");
-				 while(token != NULL && i < 7)
-				 {
-					 values[i] = atoi(token);
-					 token = strtok(NULL, " ");
-					 i++;
-				 }
-				 up = values[0];
-				 down = values[1];
-				 left = values[2];
-				 right = values[3];
-				 button_auto = values[4];
-				 button_manual = values[5];
-				 button_coin = values[6];
-				 
-				 // Check if message length is valid (13 characters expected)
-				 if(strlen(buff) == 13)
-				 {
-					 if(up == 1)      { printf("UP "); }
-					 if(down == 1)    { printf("DOWN "); }
-					 if(left == 1)    { printf("LEFT "); }
-					 if(right == 1)   { printf("RIGHT "); }
-					 if(button_auto == 1)   { printf("AUTO "); }
-					 if(button_manual == 1) { printf("MANUAL "); }
-					 if(button_coin == 1)   { printf("PICK UP THE COIN "); }
-					 printf("\r\n");
-				 }
-				 else
-				 {
-					 ClearFIFO();
-					 printf("*** BAD MESSAGE ***: %s\r\n", buff);
-				 }
-			 }
-			 else if(c == '@')
-			 {
-				 sprintf(buff, "%05u\n", cnt);
-				 cnt++;
-				 delayms(5);
-				 SerialTransmit1(buff);
-			 }
-			 else
-			 {
-				 ClearFIFO();
-			 }
-		 }
-
-		 
-		if(up==1)
-		{
-			Motor1_SetDirection(FORWARD);
-			Motor2_SetDirection(FORWARD);
-		}
-		else if(down==1)
-		{
-			Motor1_SetDirection(BACKWARD);
-			Motor2_SetDirection(BACKWARD);
-		}
-		else if(left==1)
-		{
-			Motor1_SetDirection(BACKWARD);
-			Motor2_SetDirection(FORWARD);
-		}
-		else if(right==1)
-		{
-			Motor1_SetDirection(FORWARD);
-			Motor2_SetDirection(BACKWARD);
-		}
-		else
-		{
-			Motor1_SetDirection(STOP);
-			Motor2_SetDirection(STOP);
-		}
-
-	
-		// Set both motor speeds to a constant value of 50 (0-255 range)
-		Motor1_SetSpeedforward(255);
-		Motor1_SetSpeedbackward(255);
-		Motor2_SetSpeedforward(255);
-		Motor2_SetSpeedbackward(255);
-
-
 		// Now turn on one of the outputs per loop cycle to check
 		switch (LED_toggle++)
 		{
