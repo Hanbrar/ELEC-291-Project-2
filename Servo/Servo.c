@@ -14,129 +14,107 @@
 #define FREQ 100000L // We need the ISR for timer 1 every 10 us
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
-volatile int ISR_pwm1=150, ISR_pwm2=150;
-volatile int ISR_pw=100, ISR_cnt=0, ISR_frc;
+volatile int ISR_pwm1 = 150, ISR_pwm2 = 150;
+volatile int ISR_pw = 100, ISR_cnt = 0, ISR_frc;
 
 // The Interrupt Service Routine for timer 1 is used to generate one or more standard
-// hobby servo signals.  The servo signal has a fixed period of 20ms and a pulse width
+// hobby servo signals. The servo signal has a fixed period of 20ms and a pulse width
 // between 0.6ms and 2.4ms.
 void wait_1ms(void)
 {
-    unsigned int ui;
-    _CP0_SET_COUNT(0); // resets the core timer count
-
-    // get the core timer count
-    while ( _CP0_GET_COUNT() < (SYSCLK/(2*1000)) );
+    _CP0_SET_COUNT(0); // reset the core timer count
+    while (_CP0_GET_COUNT() < (SYSCLK / (2 * 1000))); // wait 1ms
 }
 
 void waitms(int len)
 {
-	while(len--) wait_1ms();
+    while(len--) wait_1ms();
 }
 
 void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 {
-	IFS0CLR=_IFS0_T1IF_MASK; // Clear timer 1 interrupt flag, bit 4 of IFS0
+    IFS0CLR = _IFS0_T1IF_MASK; // Clear timer 1 interrupt flag
 
-	ISR_cnt++;
-	if(ISR_cnt<ISR_pwm1)
-	{
-		LATBbits.LATB2 = 1;
-	}
-	else
-	{
-		LATBbits.LATB2 = 0;
-	}
+    ISR_cnt++;
+    if(ISR_cnt < ISR_pwm1)
+        LATBbits.LATB2 = 1;
+    else
+        LATBbits.LATB2 = 0;
 
-	if(ISR_cnt<ISR_pwm2)
-	{
-		LATBbits.LATB5 = 1;
-	}
-	else
-	{
-		LATBbits.LATB5 = 0;
-	}
+    if(ISR_cnt < ISR_pwm2)
+        LATBbits.LATB5 = 1;
+    else
+        LATBbits.LATB5 = 0;
 
-	if(ISR_cnt>=2000)
-	{
-		ISR_cnt=0; // 2000 * 10us=20ms
-		ISR_frc++;
-	}
+    if(ISR_cnt >= 2000)  // 2000 * 10us = 20ms period
+    {
+        ISR_cnt = 0;
+        ISR_frc++;
+    }
 }
 
-void SetupTimer1 (void)
+void SetupTimer1(void)
 {
-	// Explanation here: https://www.youtube.com/watch?v=bu6TTZHnMPY
-	__builtin_disable_interrupts();
-	PR1 =(SYSCLK/FREQ)-1; // since SYSCLK/FREQ = PS*(PR1+1)
-	TMR1 = 0;
-	T1CONbits.TCKPS = 0; // 3=1:256 prescale value, 2=1:64 prescale value, 1=1:8 prescale value, 0=1:1 prescale value
-	T1CONbits.TCS = 0; // Clock source
-	T1CONbits.ON = 1;
-	IPC1bits.T1IP = 5;
-	IPC1bits.T1IS = 0;
-	IFS0bits.T1IF = 0;
-	IEC0bits.T1IE = 1;
-	
-	INTCONbits.MVEC = 1; //Int multi-vector
-	__builtin_enable_interrupts();
+    __builtin_disable_interrupts();
+    PR1 = (SYSCLK / FREQ) - 1; // Set period register so that period = 10us
+    TMR1 = 0;
+    T1CONbits.TCKPS = 0;       // Prescaler 1:1
+    T1CONbits.TCS = 0;         // Use internal clock
+    T1CONbits.ON = 1;
+    IPC1bits.T1IP = 5;
+    IPC1bits.T1IS = 0;
+    IFS0bits.T1IF = 0;
+    IEC0bits.T1IE = 1;
+    
+    INTCONbits.MVEC = 1;       // Multi-vector interrupts
+    __builtin_enable_interrupts();
 }
 
 void UART2Configure(int baud_rate)
 {
     // Peripheral Pin Select
-    U2RXRbits.U2RXR = 4;    //SET RX to RB8
-    RPB9Rbits.RPB9R = 2;    //SET RB9 to TX
+    U2RXRbits.U2RXR = 4;    // Set RX to RB8
+    RPB9Rbits.RPB9R = 2;    // Set RB9 to TX
 
-    U2MODE = 0;         // disable autobaud, TX and RX enabled only, 8N1, idle=HIGH
-    U2STA = 0x1400;     // enable TX and RX
+    U2MODE = 0;            // Disable autobaud; TX and RX enabled only, 8N1, idle=HIGH
+    U2STA = 0x1400;        // Enable TX and RX
     U2BRG = Baud2BRG(baud_rate); // U2BRG = (FPb / (16*baud)) - 1
     
-    U2MODESET = 0x8000;     // enable UART2
+    U2MODESET = 0x8000;    // Enable UART2
 }
 
-void delay_ms (int msecs)
-{	
-	int ticks;
-	ISR_frc=0;
-	ticks=msecs/20;
-	while(ISR_frc<ticks);
+void delay_ms(int msecs)
+{    
+    int ticks;
+    ISR_frc = 0;
+    ticks = msecs / 20;
+    while(ISR_frc < ticks);
 }
 
 /* SerialReceive() is a blocking function that waits for data on
- *  the UART2 RX buffer and then stores all incoming data into *buffer
- *
- * Note that when a carriage return '\r' is received, a nul character
- *  is appended signifying the strings end
- *
- * Inputs:  *buffer = Character array/pointer to store received data into
- *          max_size = number of bytes allocated to this pointer
- * Outputs: Number of characters received */
+ * the UART2 RX buffer and then stores all incoming data into *buffer.
+ * When a carriage return ('\r') is received, a nul character is appended.
+ */
 unsigned int SerialReceive(char *buffer, unsigned int max_size)
 {
     unsigned int num_char = 0;
- 
-    /* Wait for and store incoming data until either a carriage return is received
-     *   or the number of received characters (num_chars) exceeds max_size */
     while(num_char < max_size)
     {
-        while( !U2STAbits.URXDA);   // wait until data available in RX buffer
-        *buffer = U2RXREG;          // empty contents of RX buffer into *buffer pointer
+        while(!U2STAbits.URXDA);   // wait until data available in RX buffer
+        *buffer = U2RXREG;         // read the received data
 
-        while( U2STAbits.UTXBF);    // wait while TX buffer full
-        U2TXREG = *buffer;          // echo
+        while(U2STAbits.UTXBF);    // wait while TX buffer full
+        U2TXREG = *buffer;         // echo the received character
  
-        // insert nul character to indicate end of string
-        if( *buffer == '\r')
+        if(*buffer == '\r')        // end of string on carriage return
         {
-            *buffer = '\0';     
+            *buffer = '\0';
             break;
         }
  
         buffer++;
         num_char++;
     }
- 
     return num_char;
 }
 
@@ -159,12 +137,12 @@ unsigned int SerialReceive(char *buffer, unsigned int max_size)
                                           --------
 */
 
-void main (void)
+void main(void)
 {
     char buf[32];
     int pw;
     
-	DDPCON = 0;
+    DDPCON = 0;
     CFGCON = 0;
 
     // Configure RB2 as digital output for PWM1
@@ -172,45 +150,44 @@ void main (void)
     TRISBbits.TRISB2 = 0;   // Set RB2 as output
     LATBbits.LATB2 = 0;     // Initialize low
 
-    // Configure RA2 as digital output for PWM2
-    // ANSELBbits.ANSB5 = 0;     // Turn off analog on RB5
-    TRISBbits.TRISB5 = 0;     // Set RB5 as output
-    LATBbits.LATB5 = 0;       // Initialize low
-	
-	SetupTimer1(); // Set timer 5 to interrupt every 10 us
-
-	CFGCON = 0;
+    // Configure RB5 as digital output for PWM2
+    // Remove analog disable as RB5 is not analog-capable on this device
+    TRISBbits.TRISB5 = 0;   // Set RB5 as output
+    LATBbits.LATB5 = 0;     // Initialize low
+    
+    SetupTimer1();         // Set timer 1 to interrupt every 10 us
+    CFGCON = 0;
     UART2Configure(115200);  // Configure UART2 for a baud rate of 115200
-	
-	// Give putty a chance to start
-	delay_ms(500); // wait 500 ms
-	
-	printf("\x1b[2J\x1b[1;1H"); // Clear screen using ANSI escape sequence.
-    printf("Servo signal generator for the PIC32MX130F064B.  Output is in RB6 (pin 15).\r\n");
+    
+    // Give putty a chance to start
+    delay_ms(500);
+    
+    // Clear screen using ANSI escape sequence.
+    printf("\x1b[2J\x1b[1;1H");
+    printf("Servo signal generator for the PIC32MX130F064B.\r\n");
+    printf("Outputs are on RB2 and RB5.\r\n");
     printf("By Jesus Calvino-Fraga (c) 2018.\r\n");
-    printf("Pulse width between 60 (for 0.6ms) and 240 (for 2.4ms)\r\n");
-	
-	while (1)
-	{
-    	if (ISR_pwm1<200)
-		{
-			ISR_pwm1++;
-		}
-		else
-		{
-			ISR_pwm1=100;	
-		}
+    printf("Pulse width between 60 (0.6ms) and 240 (2.4ms)\r\n");
+    
+    // Initialize PWM values to center (150 counts ~ 1.5ms)
+    ISR_pwm1 = 150;
+    ISR_pwm2 = 150;
+    
+    while (1)
+    {
+        // Increase ISR_pwm1 from 60 to 240 (sweeping pulse width upward)
+        if (ISR_pwm1 < 240)
+            ISR_pwm1++;
+        else
+            ISR_pwm1 = 60;
 
-		if (ISR_pwm2>100)
-		{
-			ISR_pwm2--;
-		}
-		else
-		{
-			ISR_pwm2=200;	
-		}
+        // Decrease ISR_pwm2 from 240 to 60 (sweeping pulse width downward)
+        if (ISR_pwm2 > 60)
+            ISR_pwm2--;
+        else
+            ISR_pwm2 = 240;
 
-		waitms(2000);
-	}
+        // Wait 2000 ms (each delay is 20 ms period * number of cycles)
+        waitms(2000);
+    }
 }
-
