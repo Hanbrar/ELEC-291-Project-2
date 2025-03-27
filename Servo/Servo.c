@@ -154,12 +154,18 @@ void main (void)
     char buf[32];
     int pw;
     
-	DDPCON = 0;
-	
-	// Configure the pin we are using for servo control as output
-	TRISBbits.TRISB6 = 0;
-	LATBbits.LATB6 = 0;	
-	INTCONbits.MVEC = 1;
+    DDPCON = 0;
+    CFGCON = 0;
+
+    // Configure RB2 as digital output for PWM1
+    ANSELBbits.ANSB2 = 0;   // Disable analog on RB2
+    TRISBbits.TRISB2 = 0;   // Set RB2 as output
+    LATBbits.LATB2 = 0;     // Initialize low
+
+    // Configure RA2 as digital output for PWM2
+    ANSELAbits.ANSA2 = 0;   // Disable analog on RA2 (name may vary)
+    TRISAbits.TRISA2 = 0;   // Set RA2 as output
+    LATAbits.LATA2 = 0;     // Initialize low
 	
 	SetupTimer1(); // Set timer 5 to interrupt every 10 us
 
