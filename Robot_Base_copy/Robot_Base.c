@@ -461,8 +461,38 @@ void main(void)
 		
 		*/
 		// Set initial motor directions (example: both motors move forward)
-		Motor1_SetDirection(FORWARD);
-		Motor2_SetDirection(FORWARD);
+		up=0;
+		down=0;
+		left=0;
+		right=0;
+
+		//Sets to orientation of the robot in what direction it should move 
+		if(up==1)
+		{
+			Motor1_SetDirection(FORWARD);
+			Motor2_SetDirection(FORWARD);
+		}
+		else if(down==1)
+		{
+			Motor1_SetDirection(BACKWARD);
+			Motor2_SetDirection(BACKWARD);
+		}
+		else if(left==1)
+		{
+			Motor1_SetDirection(BACKWARD);
+			Motor2_SetDirection(FORWARD);
+		}
+		else if(right==1)
+		{
+			Motor1_SetDirection(FORWARD);
+			Motor2_SetDirection(BACKWARD);
+		}
+		else
+		{
+			Motor1_SetDirection(STOP);
+			Motor2_SetDirection(STOP);
+		}
+
 	
 		// Set both motor speeds to a constant value of 50 (0-255 range)
 		Motor1_SetSpeedforward(255);

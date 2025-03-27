@@ -74,7 +74,11 @@ int main(void)
     
     Init_pwm();
     
-    // Loop: sweep duty cycle from 0 to 255 and back
+    // Loop: sweep duty cycle from 0 to 255 and back 
+
+    //OC1CONSET = 0x8000; 
+    // OC1CONCLR = 0x8000;
+    // I would like to use the above to enable and disable the PWM
     while (1)
     {
        // Set_pwm(153);
