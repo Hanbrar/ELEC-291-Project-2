@@ -43,7 +43,7 @@ volatile int ISR_pwm1=150, ISR_pwm2=150, ISR_cnt=0;
 // The Interrupt Service Routine for timer 1 is used to generate one or more standard
 // hobby servo signals.  The servo signal has a fixed period of 20ms and a pulse width
 
-#define PWM_FREQ    200000L       // 200 kHz PWM frequency
+#define PWM_FREQ    500L       // 200 kHz PWM frequency
 #define DUTY_CYCLE  50  
 
 // Motor direction definitions
@@ -75,24 +75,22 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 	}
 }
 
-void SetupTimer1 (void)
+void SetupTimer1(void)
 {
-	// Explanation here: https://www.youtube.com/watch?v=bu6TTZHnMPY
-	__builtin_disable_interrupts();
-	PR1 =(SYSCLK/FREQ)-1; // since SYSCLK/FREQ = PS*(PR1+1)
-	TMR1 = 0;
-	T1CONbits.TCKPS = 0; // 3=1:256 prescale value, 2=1:64 prescale value, 1=1:8 prescale value, 0=1:1 prescale value
-	T1CONbits.TCS = 0; // Clock source
-	T1CONbits.ON = 1;
-	IPC1bits.T1IP = 5;
-	IPC1bits.T1IS = 0;
-	IFS0bits.T1IF = 0;
-	IEC0bits.T1IE = 1;
-	
-	INTCONbits.MVEC = 1; //Int multi-vector
-	__builtin_enable_interrupts();
+    __builtin_disable_interrupts();
+    PR1 = (SYSCLK / FREQ) - 1; // Set Timer1 period for 5 kHz PWM
+    TMR1 = 0;
+    T1CONbits.TCKPS = 0; // No prescaler
+    T1CONbits.TCS = 0; // Use internal clock
+    T1CONbits.ON = 1;
+    IPC1bits.T1IP = 5;
+    IPC1bits.T1IS = 0;
+    IFS0bits.T1IF = 0;
+    IEC0bits.T1IE = 1;
+    
+    INTCONbits.MVEC = 1; // Enable multi-vector interrupts
+    __builtin_enable_interrupts();
 }
-
 // Use the core timer to wait for 1 ms.
 void wait_1ms(void)
 {
@@ -209,10 +207,11 @@ int ADCRead(char analogPIN)
 void ConfigurePins(void)
 {
     // Configure pins as analog inputs
-    ANSELBbits.ANSB2 = 1;   // set RB2 (AN4, pin 6 of DIP28) as analog pin
-    TRISBbits.TRISB2 = 1;   // set RB2 as an input
-    ANSELBbits.ANSB3 = 1;   // set RB3 (AN5, pin 7 of DIP28) as analog pin
-    TRISBbits.TRISB3 = 1;   // set RB3 as an input
+	// Configure RB2 (pin 6) and RB3 (pin 7) as digital outputs for PWM
+	ANSELBbits.ANSB2 = 0;   // Disable analog functionality on RB2
+	TRISBbits.TRISB2 = 0;   // Set RB2 as an output
+	ANSELBbits.ANSB3 = 0;   // Disable analog functionality on RB3
+	TRISBbits.TRISB3 = 0;   // Set RB3 as an output
     
 	// Configure digital input pin to measure signal period
 	ANSELB &= ~(1<<5); // Set RB5 as a digital I/O (pin 14 of DIP28)
@@ -350,19 +349,23 @@ void Init_pwm(void)
 	A1-3 pin  - Motor 2
 	B0-4 pin  - Motor 2
 	*/
-    // Remap and initialize four PWM outputs for motor control.
-    // Map OC1 to RPA0 for Motor1 PWM output (unchanged)
-    RPA0Rbits.RPA0R = 0x0005;  // OC1 function motor 1
+   // Change the mapping from RPA0 to RB3 (pin 7)
+   //Motor 1 Forward
+  // Motor1 Forwards (OC1 on RB3 - pin 7)
+  RPB3Rbits.RPB3R = 0x0005;  // OC1 mapped to RB3
 
-    // Map OC2 to RPB4 for Motor2 PWM output (unchanged)
-    RPB4Rbits.RPB4R = 0x0005;  // OC2 function motor 2
+  // Motor1 Backwards (OC2 on RB4 - pin 11)
+  RPB4Rbits.RPB4R = 0x0006;  // OC2 mapped to RB4
 
-    // --- New mappings for additional motor PWMs ---
-    // Map OC3 to RPA1 for Motor3 PWM output (ensure RPA1 is free)
-    RPA1Rbits.RPA1R = 0x0005;  // OC3 function
+  // Motor2 Forwards (OC3 on RB2 - pin 6)
+  RPB2Rbits.RPB2R = 0x0007;  // OC3 mapped to RB2
 
-    // Map OC4 to RPB0 for Motor4 PWM output (ensure RPB0 is free)
-    RPB0Rbits.RPB0R = 0x0005;  // OC4 function
+  // Motor2 Backwards (OC4 on RB0 - pin 4)
+  RPB0Rbits.RPB0R = 0x0008;  // OC4 mapped to RB0
+
+  // Configure Timer2 for 200 kHz PWM
+  T2CONbits.TCKPS = 0;        // Prescaler 1:1
+  PR2 = (SYSCLK / PWM_FREQ) - 1;  // PR2 = 199
 
     // Configure OC1, OC2, OC3, and OC4 in standard PWM mode
     OC1CON = 0x0006; // Standard PWM mode
@@ -394,74 +397,74 @@ void Init_pwm(void)
 
 
 // Set Motor1 speed using PWM (0-255 range)
-void Motor1_SetSpeedforward(unsigned char speed)
+void Motor1_SetSpeedforward(int speed)
 {
     // Scale speed (0 to 255) to timer counts
-    OC1RS = (PR2 + 1) * ((float)speed / 256.0);
+    //OC1RS = (PR2 + 1) * ((float)speed / 256.0);
+	ISR_pwm1 = speed;
+
 }
 
 // Set Motor1 speed using PWM (0-255 range)
-void Motor1_SetSpeedbackward(unsigned char speed)
+void Motor1_SetSpeedbackward(int speed)
 {
     // Scale speed (0 to 255) to timer counts
-    OC2RS = (PR2 + 1) * ((float)speed / 256.0);
+   //OC2RS = (PR2 + 1) * ((float)speed / 256.0);
+   
 }
 
 
 
 // Set Motor2 speed using PWM (0-255 range)
-void Motor2_SetSpeedforward(unsigned char speed)
+void Motor2_SetSpeedforward(int speed)
 {
     // Scale speed (0 to 255) to timer counts
-    OC3RS = (PR2 + 1) * ((float)speed / 256.0);
+    //OC3RS = (PR2 + 1) * ((float)speed / 256.0);
+	ISR_pwm2 = speed;
 }
 
 // Set Motor2 speed using PWM (0-255 range)	
-void Motor2_SetSpeedbackward(unsigned char speed)
+void Motor2_SetSpeedbackward(int speed)
 {
     // Scale speed (0 to 255) to timer counts
-    OC4RS = (PR2 + 1) * ((float)speed / 256.0);
+    //OC4RS = (PR2 + 1) * ((float)speed / 256.0);
 }
 
 
 // Set Motor1 direction (FORWARD, BACKWARD, STOP)
-void Motor1_SetDirection(int direction)
+void Motor1_SetDirection(int direction, int speed)
 {
     if(direction == FORWARD)
     {
-		OC1CONSET = 0x8000;  // Enable PWM for motor 1 forwards
-        OC2CONCLR = 0x8000;  // Disable PWM for motor 1 backwards
+		Motor1_SetSpeedforward(speed);
     }
-    else if(direction == BACKWARD)
-    {
-		OC1CONCLR = 0x8000;  // Disable PWM for motor 1 forwards
-		OC2CONSET = 0x8000;  // enable PWM for motor 1  backwards
+    else if(direction == BACKWARD){
+		Motor1_SetSpeedbackward(speed);
     }
     else  // STOP
     {
-		OC1CONCLR = 0x8000;  // Disable PWM for motor 1 forwards
-		OC2CONCLR = 0x8000;  // Disable PWM for motor 1 backwards
 		
+		Motor1_SetSpeedforward(0);
+		Motor1_SetSpeedbackward(0);
     }
 }
 
 // Set Motor2 direction (FORWARD, BACKWARD, STOP)
-void Motor2_SetDirection(int direction)
+void Motor2_SetDirection(int direction,int speed)
 {
     if(direction == FORWARD)
     {
-		OC3CONSET = 0x8000;  // Enable PWM for motor 2 forwards
-		OC4CONCLR = 0x8000;  // Disable PWM for motor 2 backwards
+	
+		Motor2_SetSpeedforward(speed);
 	}
     else if(direction == BACKWARD)
     {
-		OC3CONCLR = 0x8000;// Disable PWM for motor 2 forwards
-		OC4CONSET = 0x8000;  // Enable PWM for motor 2 backwards
+		Motor2_SetSpeedbackward(speed);
     }
     else  // STOP
     {
-		OC3CONCLR = 0x8000;  // Disable PWM for motor 2 forwards
-		OC4CONCLR = 0x8000;  // Disable PWM for motor 2 forwards
+		Motor2_SetSpeedforward(0);
+		Motor2_SetSpeedbackward(0);
     }
 }
 
@@ -556,7 +559,13 @@ void main(void)
 		//Sets to orientation of the robot in what direction it should move 
 
 
+
+
 		 // --- JDY40 Test Section ---
+
+		 /*##################################*/
+
+		 /*
 		 if(U1STAbits.URXDA)
 		 {
 			 c = U1RXREG;
@@ -609,8 +618,14 @@ void main(void)
 				 ClearFIFO();
 			 }
 		 }
+		* /
 
-		 
+		/*##################################*/
+		
+
+		Motor1_SetDirection(FORWARD,4000);
+		Motor2_SetDirection(FORWARD,4000);
+		/*
 		if(up==1)
 		{
 			Motor1_SetDirection(FORWARD);
@@ -637,12 +652,8 @@ void main(void)
 			Motor2_SetDirection(STOP);
 		}
 
-	
+		*/
 		// Set both motor speeds to a constant value of 50 (0-255 range)
-		Motor1_SetSpeedforward(255);
-		Motor1_SetSpeedbackward(255);
-		Motor2_SetSpeedforward(255);
-		Motor2_SetSpeedbackward(255);
 
 
 		// Now turn on one of the outputs per loop cycle to check

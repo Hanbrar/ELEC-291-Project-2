@@ -15,6 +15,7 @@
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
 volatile int ISR_pw=100, ISR_cnt=0, ISR_frc;
+volatile int ISR_pwm1 = 50, ISR_pwm2 = 200;
 
 // The Interrupt Service Routine for timer 1 is used to generate one or more standard
 // hobby servo signals.  The servo signal has a fixed period of 20ms and a pulse width

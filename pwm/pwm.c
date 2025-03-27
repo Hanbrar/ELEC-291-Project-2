@@ -70,7 +70,12 @@ int main(void)
     TRISAbits.TRISA0 = 0; // Set RA0 as output
 
     // Set RA0 (pin 2) to high
-    LATAbits.LATA0 = 1; // Drive RA0 high
+    LATAbits.LATA0 = 0; // Drive RA0 high
+
+    TRISBbits.TRISB2 = 0; // Set RB2 (pin 6) as output
+
+// Toggle RB2 (pin 6) high
+    LATBbits.LATB2 = 0; // Drive RB2 high
     
     Init_pwm();
     
@@ -83,6 +88,7 @@ int main(void)
     {
        // Set_pwm(153);
        LATAbits.LATA0 = 1; // Drive RA0 high
+       LATBbits.LATB2 = 1; // Drive RB2 high
     }
     return 0;
 }
