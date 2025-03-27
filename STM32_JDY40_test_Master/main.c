@@ -31,6 +31,11 @@
 
 #define F_CPU 32000000L
 
+// define push buttons
+// PB3        PB5          PB6
+// Auto_mode  Manual_mode  coin_picking
+
+
 // Master JDY-40
 // Uses SysTick to delay <us> micro-seconds.
 
@@ -67,6 +72,26 @@ void Hardware_Init(void)
 	GPIOA->PUPDR |= BIT16; 
 	GPIOA->PUPDR &= ~(BIT17);
 }
+
+void Configure_Buttons(void)
+{
+    RCC->IOPENR |= BIT1; // Enable clock for Port B
+
+    // Clear mode bits for PB3, PB5, and PB6 (set as input: 00)
+    GPIOB->MODER &= ~(0x3 << (3 * 2)); // PB3
+    GPIOB->MODER &= ~(0x3 << (5 * 2)); // PB5
+    GPIOB->MODER &= ~(0x3 << (6 * 2)); // PB6
+
+    // Enable internal pull-ups for PB3, PB5, and PB6 (set to 01)
+    GPIOB->PUPDR &= ~(0x3 << (3 * 2));
+    GPIOB->PUPDR |=  (0x1 << (3 * 2));
+
+    GPIOB->PUPDR &= ~(0x3 << (5 * 2));
+    GPIOB->PUPDR |=  (0x1 << (5 * 2));
+
+    GPIOB->PUPDR &= ~(0x3 << (6 * 2));
+    GPIOB->PUPDR |=  (0x1 << (6 * 2));
+}  
 
 void SendATCommand (char * s)
 {
@@ -216,6 +241,10 @@ int main(void)
 	int down = 0;
 	int left = 0;
 	int right = 0;
+    int button_auto = 0;
+    int button_manual = 0;
+    int button_coin = 0;
+
 
     int j8, j9, button_state;
 
@@ -269,7 +298,20 @@ int main(void)
 			down = 1;
 		}
 
-		sprintf(buff, "%d %d %d %d\n", up, down, left, right);
+        if (!(GPIOB->IDR & (1 << 3))) {  // PB3 pressed (Auto_mode)
+            button_auto = 1;
+        }
+        if (!(GPIOB->IDR & (1 << 5))) {  // PB5 pressed (Manual_mode)
+            button_manual = 1;
+        }
+        if (!(GPIOB->IDR & (1 << 6))) {  // PB6 pressed (coin_picking)
+            button_coin = 1;
+        }
+        
+        
+
+
+		sprintf(buff, "%d %d %d %d %d %d %d\n", up, down, left, right, button_auto, button_manual, button_coin);
 		eputc2('!'); // Send a message to the slave. First send the 'attention' character which is '!'
 		// Wait a bit so the slave has a chance to get ready
 		waitms(5); // This may need adjustment depending on how busy is the slave
