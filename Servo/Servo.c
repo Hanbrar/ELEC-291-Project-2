@@ -50,11 +50,11 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 
 	if(ISR_cnt<ISR_pwm2)
 	{
-		LATBbits.LATA2 = 1;
+		LATBbits.LATB5 = 1;
 	}
 	else
 	{
-		LATBbits.LATA2 = 0;
+		LATBbits.LATB5 = 0;
 	}
 
 	if(ISR_cnt>=2000)
@@ -173,9 +173,9 @@ void main (void)
     LATBbits.LATB2 = 0;     // Initialize low
 
     // Configure RA2 as digital output for PWM2
-    ANSELAbits.ANSA2 = 0;   // Disable analog on RA2 (name may vary)
-    TRISAbits.TRISA2 = 0;   // Set RA2 as output
-    LATAbits.LATA2 = 0;     // Initialize low
+    ANSELBbits.ANSB5 = 0;     // Turn off analog on RB5
+    TRISBbits.TRISB5 = 0;     // Set RB5 as output
+    LATBbits.LATB5 = 0;       // Initialize low
 	
 	SetupTimer1(); // Set timer 5 to interrupt every 10 us
 
