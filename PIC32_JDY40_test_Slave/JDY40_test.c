@@ -276,6 +276,15 @@ void main(void)
     char *token;
     int values[7] = {0,0,0,0,0,0,0}; // To store extracted digits
 
+    int up = 0;
+    int down = 0;
+    int left = 0;   
+    int right = 0;
+    
+    int button_auto = 0;
+    int button_manual = 0;
+    int button_coin = 0;
+
     int i = 0;
 
     int cnt=0;
@@ -308,7 +317,7 @@ void main(void)
 
 	// We should select an unique device ID.  The device ID can be a hex
 	// number from 0x0000 to 0xFFFF.  In this case is set to 0xABBA
-	SendATCommand("AT+DVIDABBA\r\n");  
+	SendATCommand("AT+DVIDBEEF\r\n");  
 
 	cnt=0;
 	while(1)
@@ -340,9 +349,9 @@ void main(void)
                 down = values[1];
                 left = values[2];
                 right = values[3];
-                button_auto = value[4];
-                button_manual = value[5];
-                button_coin = value[6];
+                button_auto = values[4];
+                button_manual = values[5];
+                button_coin = values[6];
                 
                 // Move Moter According to Remote
 				if(strlen(buff)==13) {   // if instruciton is valid

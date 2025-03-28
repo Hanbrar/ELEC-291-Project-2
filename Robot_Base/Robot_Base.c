@@ -2,6 +2,7 @@
 #include <sys/attribs.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 
 /* Pinout for DIP28 PIC32MX130:
@@ -37,6 +38,7 @@
 #define SYSCLK 40000000L
 #define FREQ 100000L // We need the ISR for timer 1 every 10 us
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
+#define Baud1BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
 volatile int ISR_pwm1=150, ISR_pwm2=150, ISR_pwm3=150, ISR_pwm4=150, ISR_cnt=0;
 
@@ -93,6 +95,14 @@ void SetupTimer1(void)
 }
 
 
+void uart_puts(char * s)
+{
+	while(*s)
+	{
+		putchar(*s);
+		s++;
+	}
+}
 
 // Use the core timer to wait for 1 ms.
 void wait_1ms(void)
@@ -158,13 +168,211 @@ void UART2Configure(int baud_rate)
     U2MODESET = 0x8000;     // enable UART2
 }
 
-void uart_puts(char * s)
+// Needed to by scanf() and gets()
+int _mon_getc(int canblock)
 {
-	while(*s)
-	{
-		putchar(*s);
-		s++;
-	}
+	char c;
+	
+    if (canblock)
+    {
+	    while( !U2STAbits.URXDA); // wait (block) until data available in RX buffer
+	    c=U2RXREG;
+        while( U2STAbits.UTXBF);    // wait while TX buffer full
+        U2TXREG = c;          // echo
+	    if(c=='\r') c='\n'; // When using PUTTY, pressing <Enter> sends '\r'.  Ctrl-J sends '\n'
+		return (int)c;
+    }
+    else
+    {
+        if (U2STAbits.URXDA) // if data available in RX buffer
+        {
+		    c=U2RXREG;
+		    if(c=='\r') c='\n';
+			return (int)c;
+        }
+        else
+        {
+            return -1; // no characters to return
+        }
+    }
+}
+/////////////////////////////////////////////////////////
+// UART1 functions used to communicate with the JDY40  //
+/////////////////////////////////////////////////////////
+
+// TXD1 is in pin 26
+// RXD1 is in pin 24
+
+int UART1Configure(int desired_baud)
+{
+	int actual_baud;
+
+    // Peripheral Pin Select for UART1.  These are the pins that can be used for U1RX from TABLE 11-1 of '60001168J.pdf':
+    // 0000 = RPA2
+	// 0001 = RPB6
+	// 0010 = RPA4
+	// 0011 = RPB13
+	// 0100 = RPB2
+
+	// Do what the caption of FIGURE 11-2 in '60001168J.pdf' says: "For input only, PPS functionality does not have
+    // priority over TRISx settings. Therefore, when configuring RPn pin for input, the corresponding bit in the
+    // TRISx register must also be configured for input (set to �1�)."
+    
+    ANSELB &= ~(1<<13); // Set RB13 as a digital I/O
+    TRISB |= (1<<13);   // configure pin RB13 as input
+    CNPUB |= (1<<13);   // Enable pull-up resistor for RB13
+    U1RXRbits.U1RXR = 3; // SET U1RX to RB13
+
+    // These are the pins that can be used for U1TX. Check table TABLE 11-2 of '60001168J.pdf':
+    // RPA0
+	// RPB3
+	// RPB4
+	// RPB15
+	// RPB7
+
+    ANSELB &= ~(1<<15); // Set RB15 as a digital I/O
+    RPB15Rbits.RPB15R = 1; // SET RB15 to U1TX
+	
+    U1MODE = 0;         // disable autobaud, TX and RX enabled only, 8N1, idle=HIGH
+    U1STA = 0x1400;     // enable TX and RX
+    U1BRG = Baud1BRG(desired_baud); // U1BRG = (FPb / (16*baud)) - 1
+    // Calculate actual baud rate
+    actual_baud = SYSCLK / (16 * (U1BRG+1));
+
+    U1MODESET = 0x8000;     // enable UART1
+
+    return actual_baud;
+}
+
+void putc1 (char c)
+{
+	while( U1STAbits.UTXBF);   // wait while TX buffer full
+	U1TXREG = c;               // send single character to transmit buffer
+}
+
+int SerialTransmit1(const char *buffer)
+{
+    unsigned int size = strlen(buffer);
+    while(size)
+    {
+        while( U1STAbits.UTXBF);    // wait while TX buffer full
+        U1TXREG = *buffer;          // send single character to transmit buffer
+        buffer++;                   // transmit next character on following loop
+        size--;                     // loop until all characters sent (when size = 0)
+    }
+ 
+    while( !U1STAbits.TRMT);        // wait for last transmission to finish
+ 
+    return 0;
+}
+
+unsigned int SerialReceive1(char *buffer, unsigned int max_size)
+{
+    unsigned int num_char = 0;
+ 
+    while(num_char < max_size)
+    {
+        while( !U1STAbits.URXDA);   // wait until data available in RX buffer
+        *buffer = U1RXREG;          // empty contents of RX buffer into *buffer pointer
+ 
+        // insert nul character to indicate end of string
+        if( *buffer == '\n')
+        {
+            *buffer = '\0';     
+            break;
+        }
+ 
+        buffer++;
+        num_char++;
+    }
+ 
+    return num_char;
+}
+
+// Copied from here: https://forum.microchip.com/s/topic/a5C3l000000MRVAEA4/t335776
+void delayus(uint16_t uiuSec)
+{
+    uint32_t ulEnd, ulStart;
+    ulStart = _CP0_GET_COUNT();
+    ulEnd = ulStart + (SYSCLK / 2000000) * uiuSec;
+    if(ulEnd > ulStart)
+        while(_CP0_GET_COUNT() < ulEnd);
+    else
+        while((_CP0_GET_COUNT() > ulStart) || (_CP0_GET_COUNT() < ulEnd));
+}
+
+unsigned int SerialReceive1_timeout(char *buffer, unsigned int max_size)
+{
+    unsigned int num_char = 0;
+    int timeout_cnt;
+ 
+    while(num_char < max_size)
+    {
+    	timeout_cnt=0;
+    	while(1)
+    	{
+	        if(U1STAbits.URXDA) // check if data is available in RX buffer
+	        {
+	        	timeout_cnt=0;
+	        	*buffer = U1RXREG; // copy RX buffer into *buffer pointer
+	        	break;
+	        }
+	        if(++timeout_cnt==200) // 200 * 100us = 20 ms
+	        {
+	        	*buffer = '\n';
+	        	break;
+	        }
+	        delayus(100);
+	    }
+ 
+        // insert nul character to indicate end of string
+        if( *buffer == '\n')
+        {
+            *buffer = '\0';     
+            break;
+        }
+ 
+        buffer++;
+        num_char++;
+    }
+ 
+    return num_char;
+}
+
+void delayms(int len)
+{
+	while(len--) wait_1ms();
+}
+
+void ClearFIFO (void)
+{
+	unsigned char c;
+	U1STA = 0x1400;     // enable TX and RX, clear FIFO
+	while(U1STAbits.URXDA) c=U1RXREG;
+}
+
+void SendATCommand (char * s)
+{
+	char buff[40];
+	printf("Command: %s", s);
+	LATB &= ~(1<<14); // 'SET' pin of JDY40 to 0 is 'AT' mode.
+	delayms(10);
+	SerialTransmit1(s);
+	U1STA = 0x1400;     // enable TX and RX, clear FIFO
+	SerialReceive1(buff, sizeof(buff)-1);
+	LATB |= 1<<14; // 'SET' pin of JDY40 to 1 is normal operation mode.
+	delayms(10);
+	printf("Response: %s\n", buff);
+}
+
+void ReceptionOff (void)
+{
+	LATB &= ~(1<<14); // 'SET' pin of JDY40 to 0 is 'AT' mode.
+	delayms(10);
+	SerialTransmit1("AT+DVID0000\r\n"); // Some unused id, so that we get nothing.
+	delayms(10);
+	ClearFIFO();
+	LATB |= 1<<14; // 'SET' pin of JDY40 to 1 is normal operation mode.
 }
 
 char HexDigit[]="0123456789ABCDEF";
@@ -252,6 +460,10 @@ void PrintFixedPoint (unsigned long number, int decimals)
 
 // In order to keep this as nimble as possible, avoid
 // using floating point or printf() on any of its forms!
+
+
+
+
 void main(void)
 {
 	volatile unsigned long t=0;
@@ -260,12 +472,32 @@ void main(void)
 	unsigned long int count, f;
 	unsigned char LED_toggle=0;
 	float up,down,left,right;
+	float button_auto;
+	float button_manual ;
+	float button_coin ;
+	// JDY var
 
+	// Receive From Master
+	char buff[80];
+	char *token;
+	int values[7] = {0,0,0,0,0,0,0}; // To store extracted digits
+
+	int i = 0;
+
+	int cnt=0;
+	char c;
 	
-
+	DDPCON = 0;
 	CFGCON = 0;
-  
+
     UART2Configure(115200);  // Configure UART2 for a baud rate of 115200
+    UART1Configure(9600);  // Configure UART1 to communicate with JDY40 with a baud rate of 9600
+
+	// RB14 is connected to the 'SET' pin of the JDY40.  Configure as output:
+    ANSELB &= ~(1<<14); // Set RB14 as a digital I/O
+    TRISB &= ~(1<<14);  // configure pin RB14 as output
+	LATB |= (1<<14);    // 'SET' pin of JDY40 to 1 is normal operation mode
+
     ConfigurePins();
     SetupTimer1();
   
@@ -278,6 +510,25 @@ void main(void)
 	uart_puts("Measures period on RB5 (pin 14 of DIP28 package)\r\n");
 	uart_puts("Toggles RA0, RA1, RB0, RB1, RA2 (pins 2, 3, 4, 5, 9, of DIP28 package)\r\n");
 	uart_puts("Generates Servo PWM signals at RA3, RB4 (pins 10, 11 of DIP28 package)\r\n\r\n");
+	
+	// JDY 
+	ReceptionOff();
+
+	// To check configuration (if needed)
+	SendATCommand("AT+VER\r\n");
+	SendATCommand("AT+BAUD\r\n");
+	SendATCommand("AT+RFID\r\n");
+	SendATCommand("AT+DVID\r\n");
+	SendATCommand("AT+RFC\r\n");
+	SendATCommand("AT+POWE\r\n");
+	SendATCommand("AT+CLSS\r\n");
+
+	// We should select an unique device ID.  The device ID can be a hex
+	// number from 0x0000 to 0xFFFF.  In this case is set to 0xABBA
+	SendATCommand("AT+DVIDBEEF\r\n");  	
+	SendATCommand("AT+RFC030\r\n");
+	
+	cnt=0;
 	while(1)
 	{
     	adcval = ADCRead(4); // note that we call pin AN4 (RB2) by it's analog number
@@ -311,11 +562,113 @@ void main(void)
 			uart_puts("NO SIGNAL                     \r");
 		}	
 
+		
+
+		 // --- JDY40 Test Section ---
+
+		 /*##################################*/
+		 
+		 up = 0;
+		 down = 0;
+		 left = 0;
+		 right = 0;
+		 button_auto = 0;
+		 button_manual = 0;
+		 button_coin = 0;
+		 if(U1STAbits.URXDA)
+		 {
+			 c = U1RXREG;
+			 if(c == '!')
+			 {
+				 SerialReceive1(buff, sizeof(buff)-1);
+				 i = 0;
+				 token = strtok(buff, " ");
+				 while(token != NULL && i < 7)
+				 {
+					 values[i] = atoi(token);
+					 token = strtok(NULL, " ");
+					 i++;
+				 }
+				 up = values[0];
+				 down = values[1];
+				 left = values[2];
+				 right = values[3];
+				 button_auto = values[4];
+				 button_manual = values[5];
+				 button_coin = values[6];
+				 
+				 // Check if message length is valid (13 characters expected)
+				 if(strlen(buff) == 13)
+				 {
+					 if(up == 1)      { printf("UP "); }
+					 if(down == 1)    { printf("DOWN "); }
+					 if(left == 1)    { printf("LEFT "); }
+					 if(right == 1)   { printf("RIGHT "); }
+					 if(button_auto == 1)   { printf("AUTO "); }
+					 if(button_manual == 1) { printf("MANUAL "); }
+					 if(button_coin == 1)   { printf("PICK UP THE COIN "); }
+					 printf("\r\n");
+				 }
+				 else
+				 {
+					 ClearFIFO();
+					 printf("*** BAD MESSAGE ***: %s\r\n", buff);
+				 }
+			 }
+
+
+
+			ISR_pwm1 = 1; 
+			ISR_pwm2 =1; 
+			ISR_pwm3 = 1; 
+			ISR_pwm4 = 1;
+
+			if(up == 1)      
+			{ 
+				ISR_pwm1 = 100; 
+				ISR_pwm2 =1; 
+				ISR_pwm3 = 100; 
+				ISR_pwm4 = 1;
+			}
+			if(down == 1){
+				ISR_pwm1 = 1; 
+				ISR_pwm2 = 100; 
+				ISR_pwm3 = 1; 
+				ISR_pwm4 = 100;
+			}
+			if(left ==1){
+				ISR_pwm1 = 100; 
+				ISR_pwm2 = 1; 
+				ISR_pwm3 = 1; 
+				ISR_pwm4 = 100;
+			}
+			if(right==1){
+				ISR_pwm1 = 1;
+				ISR_pwm2 = 100;
+				ISR_pwm3 = 100;
+				ISR_pwm4 = 1;
+			}
+
+
+
+			 else if(c == '@')
+			 {
+				 sprintf(buff, "%05u\n", cnt);
+				 cnt++;
+				 delayms(5);
+				 SerialTransmit1(buff);
+			 }
+			 else
+			 {
+				 ClearFIFO();
+			 }
+		 }
+	
+
+		/*##################################*/
+	
+
 		// Change the servo PWM signals
-        ISR_pwm1 = 1;
-        ISR_pwm2 = 100;
-		ISR_pwm3 = 1;
-        ISR_pwm4 = 50;
 		
 		//if (ISR_pwm1<8000)
 		//{

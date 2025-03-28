@@ -39,14 +39,24 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 	IFS0CLR=_IFS0_T1IF_MASK; // Clear timer 1 interrupt flag, bit 4 of IFS0
 
 	ISR_cnt++;
-	if(ISR_cnt<ISR_pw)
+	if(ISR_cnt<ISR_pwm1)
 	{
-		LATBbits.LATB6 = 1;
+		LATBbits.LATB2 = 1;
 	}
 	else
 	{
-		LATBbits.LATB6 = 0;
+		LATBbits.LATB2 = 0;
 	}
+
+	if(ISR_cnt<ISR_pwm2)
+	{
+		LATBbits.LATB0 = 1;
+	}
+	else
+	{
+		LATBbits.LATB0 = 0;
+	}
+
 	if(ISR_cnt>=2000)
 	{
 		ISR_cnt=0; // 2000 * 10us=20ms
@@ -153,13 +163,20 @@ void main (void)
 {
     char buf[32];
     int pw;
+    int state;
     
 	DDPCON = 0;
-	
-	// Configure the pin we are using for servo control as output
-	TRISBbits.TRISB6 = 0;
-	LATBbits.LATB6 = 0;	
-	INTCONbits.MVEC = 1;
+    CFGCON = 0;
+
+    // Configure RB2 as digital output for PWM1
+    ANSELBbits.ANSB2 = 0;   // Disable analog on RB2
+    TRISBbits.TRISB2 = 0;   // Set RB2 as output
+    LATBbits.LATB2 = 0;     // Initialize low
+
+    // Configure RA2 as digital output for PWM2
+    ANSELBbits.ANSB0 = 0;     // Turn off analog on RB5
+    TRISBbits.TRISB0 = 0;     // Set RB5 as output
+    LATBbits.LATB0 = 0;       // Initialize low
 	
 	SetupTimer1(); // Set timer 5 to interrupt every 10 us
 
@@ -173,49 +190,25 @@ void main (void)
     printf("Servo signal generator for the PIC32MX130F064B.  Output is in RB6 (pin 15).\r\n");
     printf("By Jesus Calvino-Fraga (c) 2018.\r\n");
     printf("Pulse width between 60 (for 0.6ms) and 240 (for 2.4ms)\r\n");
-	
+	state=0;
 	while (1)
 	{
-    	/*
-		printf("New pulse width: ");
-    	fflush(stdout);
-    	SerialReceive(buf, sizeof(buf)-1); // wait here until data is received
- 
-    	printf("\n");
-    	fflush(stdout);
-	    pw=atoi(buf);
-	    if( (pw>=60) && (pw<=240) )
-	    {
-	    	ISR_pw=pw;
-        }
-        else
-        {
-        	printf("%d is out of the valid range\r\n", pw);
-        }
-		*/
-
-		// Change the servo PWM signals
-		if (ISR_pwm1<200)
-		{
-			ISR_pwm1++;
-		}
-		else
-		{
-			ISR_pwm1=100;	
-		}
-
-		if (ISR_pwm2>100)
-		{
-			ISR_pwm2--;
-		}
-		else
-		{
-			ISR_pwm2=200;	
-		}
-
-		waitms(2000);
+    	if(state == 0)
+         {
+              // Move to extreme position:
+              ISR_pwm1 = 200;   // Servo 1 gets a 2.0ms pulse (assuming 10us per count)
+              ISR_pwm2 = 100;   // Servo 2 gets a 1.0ms pulse
+              waitms(2000);     // Hold for 2 seconds
+              state = 1;
+         }
+         else
+         {
+              // Return to starting position:
+              ISR_pwm1 = 100;   // Servo 1 gets a 1.0ms pulse
+              ISR_pwm2 = 200;   // Servo 2 gets a 2.0ms pulse
+              waitms(2000);     // Hold for 2 seconds
+              state = 0;
 	}
-
-
+}
 }
 

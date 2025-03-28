@@ -217,8 +217,7 @@ int main(void)
     SendATCommand("AT+RFC\r\n");
     SendATCommand("AT+POWE\r\n");
     SendATCommand("AT+CLSS\r\n");
-
-    SendATCommand("AT+DVIDBEEF\r\n");
+    SendATCommand("AT+DVIDABBB\r\n");
     SendATCommand("AT+RFC030\r\n");
 
     while(1)
@@ -231,12 +230,12 @@ int main(void)
         j8 = readADC(ADC_CHSELR_CHSEL8);
         j9 = readADC(ADC_CHSELR_CHSEL9);
 
-        if(j8 > 1000 && j8 <2900)
+        if(j8 > 2900)
             right = 1;
         else if(j8 <= 1000)
             left = 1;
-		
-		if(j9 > 1000 && j9 <2900)
+
+        if(j9 > 2900)
             up = 1;
         else if(j9 <= 1000)
             down = 1;
@@ -251,8 +250,7 @@ int main(void)
 
         // Construct message to send to the slave device
         sprintf(buff, "%d %d %d %d %d %d %d\n", 
-               up, down, left, right, button_auto, button_manual, button_coin);
-		
+                up, down, left, right, button_auto, button_manual, button_coin);
 
         // Send the message using the JDY-40 protocol:
         eputc2('!');  // Attention character
@@ -265,7 +263,7 @@ int main(void)
         	while(1)
 		{
 			if(ReceivedBytes2()>5) break; // Something has arrived
-			if(++timeout_cnt>200) break; // Wait up to 25ms for the repply
+			if(++timeout_cnt>240) break; // Wait up to 25ms for the repply
 			Delay_us(100); // 100us*250=25ms
 		}
 		
@@ -275,11 +273,10 @@ int main(void)
 			if(strlen(buff)>0) // Check for valid message size (5 characters + new line '\n')
 			{
 				printf("Slave says: %s\r", buff);
-
 			}
 			else
 			{
-			
+				printf("*** BAD MESSAGE ***: %s\r", buff);
 				while(ReceivedBytes2()>0) egetc2(); // Clear FIFO
 			}
 		}
@@ -292,6 +289,6 @@ int main(void)
 		waitms(50);  // Set the information interchange pace: communicate about every 50ms
         fflush(stdout);
         GPIOA->ODR ^= BIT8; // Toggle PA8 (if used for LED indication)
-        delayms(150);
+        delayms(500);
     }
 }
