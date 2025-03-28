@@ -17,9 +17,8 @@
 volatile int ISR_pwm1 = 150, ISR_pwm2 = 150;
 volatile int ISR_pw = 100, ISR_cnt = 0, ISR_frc;
 
-// The Interrupt Service Routine for timer 1 is used to generate one or more standard
-// hobby servo signals. The servo signal has a fixed period of 20ms and a pulse width
-// between 0.6ms and 2.4ms.
+// The Interrupt Service Routine for timer 1 generates standard hobby servo signals.
+// The servo signal has a fixed period of 20ms and an active pulse width of 1ms to 2ms.
 void wait_1ms(void)
 {
     _CP0_SET_COUNT(0); // reset the core timer count
@@ -91,9 +90,9 @@ void delay_ms(int msecs)
     while(ISR_frc < ticks);
 }
 
-/* SerialReceive() is a blocking function that waits for data on
- * the UART2 RX buffer and then stores all incoming data into *buffer.
- * When a carriage return ('\r') is received, a nul character is appended.
+/* SerialReceive() is a blocking function that waits for data on the UART2 RX buffer
+ * and then stores all incoming data into *buffer. When a carriage return ('\r') is
+ * received, a nul character is appended.
  */
 unsigned int SerialReceive(char *buffer, unsigned int max_size)
 {
@@ -150,12 +149,11 @@ void main(void)
     TRISBbits.TRISB2 = 0;   // Set RB2 as output
     LATBbits.LATB2 = 0;     // Initialize low
 
-    // Configure RB5 as digital output for PWM2
-    // Remove analog disable as RB5 is not analog-capable on this device
+    // Configure RB5 as digital output for PWM2 (RB5 is digital only)
     TRISBbits.TRISB5 = 0;   // Set RB5 as output
     LATBbits.LATB5 = 0;     // Initialize low
     
-    SetupTimer1();         // Set timer 1 to interrupt every 10 us
+    SetupTimer1();           // Set timer 1 to interrupt every 10 us
     CFGCON = 0;
     UART2Configure(115200);  // Configure UART2 for a baud rate of 115200
     
@@ -167,7 +165,7 @@ void main(void)
     printf("Servo signal generator for the PIC32MX130F064B.\r\n");
     printf("Outputs are on RB2 and RB5.\r\n");
     printf("By Jesus Calvino-Fraga (c) 2018.\r\n");
-    printf("Pulse width between 60 (0.6ms) and 240 (2.4ms)\r\n");
+    printf("Pulse width between 100 (1.0ms) and 200 (2.0ms)\r\n");
     
     // Initialize PWM values to center (150 counts ~ 1.5ms)
     ISR_pwm1 = 150;
@@ -175,19 +173,22 @@ void main(void)
     
     while (1)
     {
-        // Increase ISR_pwm1 from 60 to 240 (sweeping pulse width upward)
-        if (ISR_pwm1 < 240)
+        // Increase ISR_pwm1 from 100 to 200 (sweeping pulse width upward)
+        if (ISR_pwm1 < 200)
             ISR_pwm1++;
         else
-            ISR_pwm1 = 60;
+            ISR_pwm1 = 100;
 
-        // Decrease ISR_pwm2 from 240 to 60 (sweeping pulse width downward)
-        if (ISR_pwm2 > 60)
+        // Decrease ISR_pwm2 from 200 to 100 (sweeping pulse width downward)
+        if (ISR_pwm2 > 100)
             ISR_pwm2--;
         else
-            ISR_pwm2 = 240;
+            ISR_pwm2 = 200;
 
         // Wait 2000 ms (each delay is 20 ms period * number of cycles)
         waitms(2000);
+
+		ISR_pwm1 = 150;
+		ISR_pwm2 = 150;
     }
 }
