@@ -12,81 +12,86 @@
 
 #define SYSCLK 40000000L
 #define FREQ 100000L // We need the ISR for timer 1 every 10 us
-#define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
+#define Baud2BRG(desired_baud) ((SYSCLK / (16*desired_baud))-1)
 
 volatile int ISR_pwm1 = 150, ISR_pwm2 = 150;
-volatile int ISR_pw = 100, ISR_cnt = 0, ISR_frc;
+volatile int ISR_cnt = 0, ISR_frc = 0;
 
-// The Interrupt Service Routine for timer 1 generates standard hobby servo signals.
-// The servo signal has a fixed period of 20ms and an active pulse width of 1ms to 2ms.
+// Generates a 1ms delay using the core timer.
 void wait_1ms(void)
 {
-    _CP0_SET_COUNT(0); // reset the core timer count
+    _CP0_SET_COUNT(0); // reset core timer
     while (_CP0_GET_COUNT() < (SYSCLK / (2 * 1000))); // wait 1ms
 }
 
+// Wait for a given number of milliseconds.
 void waitms(int len)
 {
     while(len--) wait_1ms();
 }
 
+// Timer1 ISR: generates two servo PWM signals.
+// Each 10 µs tick, the ISR compares the current count with the desired pulse width.
 void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 {
-    IFS0CLR = _IFS0_T1IF_MASK; // Clear timer 1 interrupt flag
+    IFS0CLR = _IFS0_T1IF_MASK; // clear Timer1 interrupt flag
 
     ISR_cnt++;
-    if(ISR_cnt < ISR_pwm1)
+    // PWM for servo 1 (output on RB2)
+    if (ISR_cnt < ISR_pwm1)
         LATBbits.LATB2 = 1;
     else
         LATBbits.LATB2 = 0;
 
-    if(ISR_cnt < ISR_pwm2)
+    // PWM for servo 2 (output on RB5)
+    if (ISR_cnt < ISR_pwm2)
         LATBbits.LATB5 = 1;
     else
         LATBbits.LATB5 = 0;
 
-    if(ISR_cnt >= 2000)  // 2000 * 10us = 20ms period
-    {
+    // 2000 counts * 10 µs = 20 ms period (standard for servos)
+    if (ISR_cnt >= 2000) {
         ISR_cnt = 0;
         ISR_frc++;
     }
 }
 
+// Configure Timer1 to trigger every 10 µs.
 void SetupTimer1(void)
 {
     __builtin_disable_interrupts();
-    PR1 = (SYSCLK / FREQ) - 1; // Set period register so that period = 10us
+    PR1 = (SYSCLK / FREQ) - 1; // period so that each tick is 10 µs
     TMR1 = 0;
-    T1CONbits.TCKPS = 0;       // Prescaler 1:1
-    T1CONbits.TCS = 0;         // Use internal clock
+    T1CONbits.TCKPS = 0;       // prescaler 1:1
+    T1CONbits.TCS = 0;         // internal clock
     T1CONbits.ON = 1;
     IPC1bits.T1IP = 5;
     IPC1bits.T1IS = 0;
     IFS0bits.T1IF = 0;
     IEC0bits.T1IE = 1;
     
-    INTCONbits.MVEC = 1;       // Multi-vector interrupts
+    INTCONbits.MVEC = 1;       // multi-vector interrupts
     __builtin_enable_interrupts();
 }
 
+// Configure UART2 for serial communication (baud rate set as needed).
 void UART2Configure(int baud_rate)
 {
-    // Peripheral Pin Select
-    U2RXRbits.U2RXR = 4;    // Set RX to RB8
-    RPB9Rbits.RPB9R = 2;    // Set RB9 to TX
+    U2RXRbits.U2RXR = 4;    // set RX to RB8
+    RPB9Rbits.RPB9R = 2;    // set TX to RB9
 
-    U2MODE = 0;            // Disable autobaud; TX and RX enabled only, 8N1, idle=HIGH
-    U2STA = 0x1400;        // Enable TX and RX
-    U2BRG = Baud2BRG(baud_rate); // U2BRG = (FPb / (16*baud)) - 1
-    
-    U2MODESET = 0x8000;    // Enable UART2
+    U2MODE = 0;            // disable autobaud; enable TX and RX, 8N1
+    U2STA = 0x1400;        // enable TX and RX
+    U2BRG = Baud2BRG(baud_rate); // set baud rate generator
+    U2MODESET = 0x8000;    // enable UART2
 }
 
+// A simple delay using the timer ISR flag.
 void delay_ms(int msecs)
 {    
     int ticks;
     ISR_frc = 0;
-    ticks = msecs / 20;
+    ticks = msecs / 20; // because the period is 20ms
     while(ISR_frc < ticks);
 }
 
@@ -117,78 +122,68 @@ unsigned int SerialReceive(char *buffer, unsigned int max_size)
     return num_char;
 }
 
-/* Pinout for DIP28 PIC32MX130:
-                                          --------
-                                   MCLR -|1     28|- AVDD 
-  VREF+/CVREF+/AN0/C3INC/RPA0/CTED1/RA0 -|2     27|- AVSS 
-        VREF-/CVREF-/AN1/RPA1/CTED2/RA1 -|3     26|- AN9/C3INA/RPB15/SCK2/CTED6/PMCS1/RB15
-   PGED1/AN2/C1IND/C2INB/C3IND/RPB0/RB0 -|4     25|- CVREFOUT/AN10/C3INB/RPB14/SCK1/CTED5/PMWR/RB14
-  PGEC1/AN3/C1INC/C2INA/RPB1/CTED12/RB1 -|5     24|- AN11/RPB13/CTPLS/PMRD/RB13
-   AN4/C1INB/C2IND/RPB2/SDA2/CTED13/RB2 -|6     23|- AN12/PMD0/RB12
-     AN5/C1INA/C2INC/RTCC/RPB3/SCL2/RB3 -|7     22|- PGEC2/TMS/RPB11/PMD1/RB11
-                                    VSS -|8     21|- PGED2/RPB10/CTED11/PMD2/RB10
-                     OSC1/CLKI/RPA2/RA2 -|9     20|- VCAP
-                OSC2/CLKO/RPA3/PMA0/RA3 -|10    19|- VSS
-                         SOSCI/RPB4/RB4 -|11    18|- TDO/RPB9/SDA1/CTED4/PMD3/RB9
-         SOSCO/RPA4/T1CK/CTED9/PMA1/RA4 -|12    17|- TCK/RPB8/SCL1/CTED10/PMD4/RB8
-                                    VDD -|13    16|- TDI/RPB7/CTED3/PMD5/INT0/RB7
-                    PGED3/RPB5/PMD7/RB5 -|14    15|- PGEC3/RPB6/PMD6/RB6
-                                          --------
-*/
+/* Pinout for DIP28 PIC32MX130 (omitted for brevity) */
 
 void main(void)
 {
-    char buf[32];
-    int pw;
-    
+    int dir1 = 1, dir2 = -1; // direction flags for oscillation (1 = increasing, -1 = decreasing)
+
     DDPCON = 0;
     CFGCON = 0;
 
-    // Configure RB2 as digital output for PWM1
+    // Configure RB2 as digital output for PWM1.
     ANSELBbits.ANSB2 = 0;   // Disable analog on RB2
     TRISBbits.TRISB2 = 0;   // Set RB2 as output
     LATBbits.LATB2 = 0;     // Initialize low
 
-    // Configure RB5 as digital output for PWM2 (RB5 is digital only)
+    // Configure RB5 as digital output for PWM2 (digital-only pin).
     TRISBbits.TRISB5 = 0;   // Set RB5 as output
     LATBbits.LATB5 = 0;     // Initialize low
     
-    SetupTimer1();           // Set timer 1 to interrupt every 10 us
+    SetupTimer1();           // Set Timer1 to interrupt every 10 µs
     CFGCON = 0;
-    UART2Configure(115200);  // Configure UART2 for a baud rate of 115200
-    
-    // Give putty a chance to start
+    UART2Configure(115200);  // Configure UART2 (baud rate 115200)
+
+    // Allow time for the serial terminal to start.
     delay_ms(500);
     
-    // Clear screen using ANSI escape sequence.
+    // Clear screen and print banner.
     printf("\x1b[2J\x1b[1;1H");
     printf("Servo signal generator for the PIC32MX130F064B.\r\n");
     printf("Outputs are on RB2 and RB5.\r\n");
     printf("By Jesus Calvino-Fraga (c) 2018.\r\n");
-    printf("Pulse width between 100 (1.0ms) and 200 (2.0ms)\r\n");
+    printf("Pulse width oscillates between 100 (1.0ms) and 200 (2.0ms)\r\n");
     
-    // Initialize PWM values to center (150 counts ~ 1.5ms)
+    // Initialize PWM values to center position (150 ≈ 1.5ms pulse).
     ISR_pwm1 = 150;
     ISR_pwm2 = 150;
     
+    // Main loop: update PWM values to create a triangular (oscillating) waveform.
     while (1)
     {
-        // Increase ISR_pwm1 from 100 to 200 (sweeping pulse width upward)
-        if (ISR_pwm1 < 200)
-            ISR_pwm1++;
-        else
+        // Update servo 1 PWM (oscillates between 100 and 200)
+        ISR_pwm1 += dir1;
+        if (ISR_pwm1 >= 200) {
+            ISR_pwm1 = 200;
+            dir1 = -1;  // reverse direction to decrease
+        }
+        else if (ISR_pwm1 <= 100) {
             ISR_pwm1 = 100;
+            dir1 = 1;   // reverse direction to increase
+        }
 
-        // Decrease ISR_pwm2 from 200 to 100 (sweeping pulse width downward)
-        if (ISR_pwm2 > 100)
-            ISR_pwm2--;
-        else
+        // Update servo 2 PWM (oscillates between 100 and 200 in opposite phase)
+        ISR_pwm2 += dir2;
+        if (ISR_pwm2 >= 200) {
             ISR_pwm2 = 200;
+            dir2 = -1;
+        }
+        else if (ISR_pwm2 <= 100) {
+            ISR_pwm2 = 100;
+            dir2 = 1;
+        }
 
-        // Wait 2000 ms (each delay is 20 ms period * number of cycles)
-        waitms(2000);
-
-		ISR_pwm1 = 150;
-		ISR_pwm2 = 150;
+        // Delay between each PWM update.
+        waitms(20); // 20 ms delay per step (adjust for faster/slower oscillation)
     }
 }
