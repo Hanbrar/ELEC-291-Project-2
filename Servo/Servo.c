@@ -14,7 +14,7 @@
 #define FREQ 100000L // We need the ISR for timer 1 every 10 us
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
-volatile int ISR_pwm1=150, ISR_pwm2=150;
+volatile int ISR_pwm1=240, ISR_pwm2 = 200;
 volatile int ISR_pw=100, ISR_cnt=0, ISR_frc;
 
 // The Interrupt Service Routine for timer 1 is used to generate one or more standard
@@ -163,7 +163,8 @@ void main (void)
 {
     char buf[32];
     int pw;
-    int state;
+	int count1;
+	int state = 0;
     
 	DDPCON = 0;
     CFGCON = 0;
@@ -173,10 +174,16 @@ void main (void)
     TRISBbits.TRISB2 = 0;   // Set RB2 as output
     LATBbits.LATB2 = 0;     // Initialize low
 
-    // Configure RA2 as digital output for PWM2
-    ANSELBbits.ANSB0 = 0;     // Turn off analog on RB5
-    TRISBbits.TRISB0 = 0;     // Set RB5 as output
+    // Configure RB4 as digital output for PWM2
+    ANSELBbits.ANSB0 = 0;     // Turn off analog on RB4
+    TRISBbits.TRISB0 = 0;     // Set RB4 as output
     LATBbits.LATB0 = 0;       // Initialize low
+
+    // Configure RB3 as digital output for PWM2
+   // ANSELBbits.ANSA0 = 0;     // Turn off analog on RB3
+    TRISAbits.TRISA0 = 0;     // Set RB3 as output
+    LATAbits.LATA0 = 0;       // Initialize low
+    //ODCBbits.ODCB3 = 0;
 	
 	SetupTimer1(); // Set timer 5 to interrupt every 10 us
 
@@ -190,25 +197,94 @@ void main (void)
     printf("Servo signal generator for the PIC32MX130F064B.  Output is in RB6 (pin 15).\r\n");
     printf("By Jesus Calvino-Fraga (c) 2018.\r\n");
     printf("Pulse width between 60 (for 0.6ms) and 240 (for 2.4ms)\r\n");
-	state=0;
+	
+
 	while (1)
 	{
-    	if(state == 0)
-         {
-              // Move to extreme position:
-              ISR_pwm1 = 200;   // Servo 1 gets a 2.0ms pulse (assuming 10us per count)
-              ISR_pwm2 = 100;   // Servo 2 gets a 1.0ms pulse
-              waitms(2000);     // Hold for 2 seconds
-              state = 1;
-         }
-         else
-         {
-              // Return to starting position:
-              ISR_pwm1 = 100;   // Servo 1 gets a 1.0ms pulse
-              ISR_pwm2 = 200;   // Servo 2 gets a 2.0ms pulse
-              waitms(2000);     // Hold for 2 seconds
-              state = 0;
-	}
-}
-}
 
+        //pmw2 is top servo
+        //pwm1 is bottom servo
+        /* state machine 
+          top         bot
+        0 0     -> 60
+        1 0     -> 60
+        2 90    -> 150
+        3 90    -> 150
+        4 0     -> 60
+        5 0     -> 60
+        6 ~30   -> 90
+        */ 
+/*
+		waitms(2000);
+		ISR_pwm1 = 80;
+		waitms(2000);
+		ISR_pwm1 = 180;
+		waitms(2000);
+		ISR_pwm1 = 240;
+*/
+
+		
+    	if (state == 0) {
+
+            waitms(2000);
+            ISR_pwm1 = 240;
+            ISR_pwm2 = 200;
+            waitms(500);
+            state = 1;
+
+        } else if(state == 1) {
+            
+            ISR_pwm1 = 200;
+            waitms(500);     // Hold for 0.5 seconds
+            state = 2;
+
+        } else if(state == 2) {
+
+            for(ISR_pwm2 = 200; ISR_pwm2 >= 100;ISR_pwm2--){
+				waitms(10);
+			}
+
+            LATAbits.LATA0 = 1;
+			waitms(2000);
+			state = 3;
+
+        } else if (state == 3) {
+
+            for(ISR_pwm1 = 200; ISR_pwm1 <= 240;ISR_pwm1++){
+				waitms(10);
+			}
+            waitms(500);
+			state = 4;
+
+        } else if (state == 4) {
+
+            for(ISR_pwm2 = 100; ISR_pwm2 <= 180;ISR_pwm2++){
+				waitms(10);
+			}
+
+			waitms(500);
+			state = 5;
+
+        } else if (state == 5) {
+
+            for(ISR_pwm1 = 240; ISR_pwm1 >= 60;ISR_pwm1--){
+				waitms(10);
+			}
+            LATAbits.LATA0 = 0;
+            waitms(3000);
+			state = 6;
+            
+        } else if (state == 6) {
+            
+            ISR_pwm1 = 240;
+            ISR_pwm2 = 180;
+
+			waitms(500);
+			state = 0;
+        }
+        
+
+
+    }
+
+}
