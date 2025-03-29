@@ -97,7 +97,7 @@ void SetupTimer1(void)
 
 
 /*##################################*/
-#define PIN_PERIOD (PORTB&(1<<5))
+#define PIN_PERIOD (PORTB&(1<<6)) // for pin 15
 // GetPeriod() seems to work fine for frequencies between 200Hz and 700kHz.
 long int GetPeriod (int n)
 {
@@ -466,7 +466,6 @@ void main(void)
 	volatile unsigned long t=0;
     int adcval;
     long int v;
-	unsigned long int count, f;
 	unsigned char LED_toggle=0;
 	float up,down,left,right,button_auto,button_manual,button_coin;    
     ConfigurePins();
@@ -475,12 +474,23 @@ void main(void)
     char *token;
 	int values[5] = {0,0,0,0,0}; // To store extracted digits
     int speedx,speedy;
+    float Perimeter1,Perimeter2;
 	int i = 0;
-
+    /*Adding ADC definition*/
+    int adcval1,adcval2;
 
 	char buff[80];
     int cnt=0;
     char c;
+    /*Metal dector Configuration*/
+
+    long int count;
+	float T, f;
+    float r;
+    float ct,c1,c2;
+    c1=0.00000001; //10nf
+    c2 = 0.0000001; //100nf
+    float Inductor;
     
 	DDPCON = 0;
 	CFGCON = 0;
@@ -526,8 +536,27 @@ void main(void)
 	while(1)
 	{	
         
-      
-        printf("Speedx: %d, Speedy: %d\r\n", speedx, speedy);
+        adcval1 = ADCRead(4); // note that we call pin AN4 (RB2) by it's analog number pin 6 
+		Perimeter1=(adcval1*3290L)/1023L; // 3.290 is VDD
+        adcval2 = ADCRead(5); // note that we call pin AN4 (RB2) by it's analog number pin 6 
+		Perimeter2=(adcval2*3290L)/1023L; // 3.290 is VDD
+
+        //Period calculations and display
+
+        count=GetPeriod(100);
+		if(count>0)
+		{
+			T=(count*2.0)/(SYSCLK*100.0);
+            f=1/T;
+            ct=(c1*c1)/(c1+c2);
+            //Calculation of Inductance
+            Inductor=1/(39.4784*f*f*ct); // L=1/(4*pi^2*f^2*C) 4pi^2~39.4784
+            /*##########################*/
+            //This is where in the code where we will measure inductor that will
+            //directly tell us if metal content is present 
+		}
+	
+        printf("Speedx: %d, Speedy: %d,Perimeter1: %f,Perimeter2: %f,Inductor: %f\r\n", speedx, speedy,Perimeter1,Perimeter2,Inductor);
         
         if(speedy>1){
             ISR_pwm1 = speedy; //pin 9 - motor1 forawrd
@@ -617,6 +646,7 @@ void main(void)
 			}
 			
 		}
+        
 
         
         
