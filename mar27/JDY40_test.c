@@ -535,6 +535,8 @@ void main(void)
     speedy=1;
 	while(1)
 	{	
+
+        /*NEW CODE ADDED HERE */
         
         adcval1 = ADCRead(4); // note that we call pin AN4 (RB2) by it's analog number pin 6 
 		Perimeter1=(adcval1*3290L)/1023L; // 3.290 is VDD
@@ -555,6 +557,11 @@ void main(void)
             //This is where in the code where we will measure inductor that will
             //directly tell us if metal content is present 
 		}
+
+        //
+        /*NEW CODE ADDED HERE ENDS */
+
+        //If issue look at this informatoin
 	
         printf("Speedx: %d, Speedy: %d,Perimeter1: %f,Perimeter2: %f,Inductor: %f\r\n", speedx, speedy,Perimeter1,Perimeter2,Inductor);
         
