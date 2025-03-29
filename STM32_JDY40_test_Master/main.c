@@ -187,6 +187,25 @@ void ReceptionOff(void)
         egetc2(); // Clear FIFO
 }
 
+// input: adc voltage
+// output: duty cycle (0-100%), deviation from 1.6V
+int voltageToDuty(float adc_v)
+{
+	int duty = (int)(((adc_v - 1.6) / 1.6) * 100.0);
+
+	if (duty > 100) {
+		duty = 100;
+	} else if (duty < -100) {
+		duty = -100;
+	}
+
+	if (abs(duty) < 5) {
+		duty = 1;
+	}
+
+    return (duty);
+}
+
 //**************************************************************
 // Main Function
 //**************************************************************
@@ -194,9 +213,10 @@ int main(void)
 {
     char buff[80];
     int timeout_cnt = 0;
-    int up, down, left, right;
+    int up, down, left, right, duty_x, duty_y;
     int button_auto, button_manual, button_coin;
     int j8, j9;
+	float adc_v8, adc_v9;
 
     Hardware_Init();
     initUART2(9600);
@@ -224,22 +244,26 @@ int main(void)
     while(1)
     {
         // Reset all variables at the start of each loop
-        up = 0; down = 0; left = 0; right = 0;
+        up = 0; down = 0; left = 0; right = 0; duty_x = 0; duty_y = 0;
         button_auto = 0; button_manual = 0; button_coin = 0;
 
         // Read ADC channels for joystick (channels 8 and 9)
         j8 = readADC(ADC_CHSELR_CHSEL8);
         j9 = readADC(ADC_CHSELR_CHSEL9);
+		adc_v8 = (j8 * 3.3f) / 0x1000;
+		adc_v9 = (j9 * 3.3f) / 0x1000;
 
-        if(j8 > 1000 && j8 <2900)
-            right = 1;
-        else if(j8 <= 1000)
-            left = 1;
-		
-		if(j9 > 1000 && j9 <2900)
-            up = 1;
-        else if(j9 <= 1000)
-            down = 1;
+		duty_x = voltageToDuty(adc_v8);
+		duty_y = voltageToDuty(adc_v9);
+
+        // if(adc_v8 > 1.6 && j8 <2900)
+        //     right = 1;
+        // else if(j8 <= 1000)
+        //     left = 1;
+		// if(j9 > 1000 && j9 <2900)
+        //     up = 1;
+        // else if(j9 <= 1000)
+        //     down = 1;
 
         // Read push buttons (PB3: Auto_mode, PB5: Manual_mode, PB6: coin_picking)
         if (!(GPIOB->IDR & (1 << 3))) 
@@ -250,8 +274,8 @@ int main(void)
             button_coin = 1;
 
         // Construct message to send to the slave device
-        sprintf(buff, "%d %d %d %d %d %d %d\n", 
-               up, down, left, right, button_auto, button_manual, button_coin);
+        sprintf(buff, "%d %d %d %d %d\n", 
+               duty_x, duty_y, button_auto, button_manual, button_coin);
 		
 
         // Send the message using the JDY-40 protocol:
@@ -291,7 +315,7 @@ int main(void)
 		
 		waitms(50);  // Set the information interchange pace: communicate about every 50ms
         fflush(stdout);
-        GPIOA->ODR ^= BIT8; // Toggle PA8 (if used for LED indication)
+        // GPIOA->ODR ^= BIT8; // Toggle PA8 (if used for LED indication)
         delayms(150);
     }
 }
