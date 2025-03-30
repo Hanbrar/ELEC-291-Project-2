@@ -52,7 +52,7 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 
 	ISR_cnt++;
 
-    // Turn off pins when ISR_cnt matches their respective PWM values
+    // Turn off pins when I-SR_cnt matches their respective PWM values
     if (ISR_cnt == ISR_pwm2) {
         LATAbits.LATA3 = 0; // Turn off RA3 (PWM output, pin 10)
     }

@@ -66,7 +66,7 @@ volatile int ISR_pwm1=150, ISR_pwm2=150, ISR_pwm3=150, ISR_pwm4=150, ISR_cnt=0, 
 volatile enum MovementState movement_state = START; //set default state
 volatile unsigned int state_start_time = 0;
 
-volatile int cnt = 0;
+//volatile int cnt = 0;
 
 volatile enum CoinSubState coin_substate = COIN_STOP;
 volatile unsigned int coin_start_time;
@@ -500,53 +500,7 @@ void ReceptionOff (void)
     LATB |= 1<<14; // 'SET' pin of JDY40 to 1 is normal operation mode.
 }
 
-void newInfoArrived (int *values) {
 
-    char buff[80];
-    char c;
-    char *token; //pointer for parsing
-    int i;
-
-    c=U1RXREG;
-    if(c=='!') // Master is sending message
-    {
-        //SerialReceive1_timeout(buff, sizeof(buff)-1);
-                
-        SerialReceive1(buff, sizeof(buff)-1);
-                
-        i = 0;
-        token = strtok(buff, " ");
-        while(token != NULL && i < 5)
-        {
-            values[i] = atoi(token);
-            token = strtok(NULL, " ");
-            i++;
-        }       
-       
-        if(strlen(buff)==13)
-        {
-            printf("Master says: %s\r\n", buff);
-        }
-        else
-        {
-            // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
-            ClearFIFO();
-            printf("*** BAD MESSAGE ***: %s\r\n", buff);
-        }				
-    }
-    else if(c=='@') // Master wants slave data
-    {
-        sprintf(buff, "%05u\n", cnt);
-        cnt++;
-        delayms(5); // The radio seems to need this delay...
-        SerialTransmit1(buff);
-    }
-    else
-    {
-        // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
-        ClearFIFO();
-    }
-}
 
 void main(void)
 {
@@ -570,9 +524,9 @@ void main(void)
     /*Adding ADC definition*/
     int adcval1,adcval2;
 
-    //char buff[80];
-    cnt=0;
-    //char c;
+    char buff[80];
+    int cnt=0;
+    char c;
     /*Metal dector Configuration*/
 
     //for servo
@@ -884,15 +838,59 @@ void main(void)
     
         //communication and updating variables
         if(U1STAbits.URXDA) // Something has arrived
-        {
-            newInfoArrived(values);
-            
-            // After the function call, values[] will be updated
-            speedx = values[0];
-            speedy = values[1];
-            button_auto = values[2];
-            button_manual = values[3];
-            button_coin = values[4];
-        }      
+            {
+
+                
+                
+                c=U1RXREG;
+                if(c=='!') // Master is sending message
+                {
+                    //SerialReceive1_timeout(buff, sizeof(buff)-1);
+                    
+
+                    SerialReceive1(buff, sizeof(buff)-1);
+                    
+                    i = 0;
+                    token = strtok(buff, " ");
+                    while(token != NULL && i < 5)
+                    {
+                        values[i] = atoi(token);
+                        token = strtok(NULL, " ");
+                        i++;
+                    }
+                    speedx = values[0];
+                    speedy = values[1];
+                    button_auto = values[2];
+                    button_manual = values[3];
+                    button_coin = values[4];
+    
+                    
+                    
+                    if(strlen(buff)==13)
+                    {
+
+                        printf("Master says: %s\r\n", buff);
+                    }
+                    else
+                    {
+                        // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
+                        ClearFIFO();
+                        printf("*** BAD MESSAGE ***: %s\r\n", buff);
+                    }				
+                }
+                else if(c=='@') // Master wants slave data
+                {
+                    sprintf(buff, "%05u\n", cnt);
+                    cnt++;
+                    delayms(5); // The radio seems to need this delay...
+                    SerialTransmit1(buff);
+                }
+                else
+                {
+                    // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
+                    ClearFIFO();
+                }
+                
+            }    
     }
 }
