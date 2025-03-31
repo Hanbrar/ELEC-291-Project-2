@@ -1,4 +1,3 @@
-
 #include <XC.h>
 #include <sys/attribs.h>
 #include <stdio.h>
@@ -41,17 +40,42 @@
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 #define Baud1BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
+//servo
+volatile int ISR_pwm5=150, ISR_pwm6=150;
+volatile int ISR_pw=100, ISR_cnt2=0, ISR_frc;
+//motor
 volatile int ISR_pwm1=150, ISR_pwm2=150, ISR_pwm3=150, ISR_pwm4=150, ISR_cnt=0;
 
 // The Interrupt Service Routine for timer 1 is used to generate one or more standard
 // hobby servo signals.  The servo signal has a fixed period of 20ms and a pulse width
 // between 0.6ms and 2.4ms.
+
+/*Period code*/
+
+// Define possible states for our state machine
+typedef enum { 
+    WAIT_FOR_LOW,   // Waiting for the square wave to be low
+    WAIT_FOR_HIGH,  // Waiting for the square wave to go high
+    COUNT_PERIOD    // Counting time while the square wave is high
+} PeriodState;
+
+// Global variables (declared volatile as they may be modified in interrupts or concurrently)
+volatile PeriodState periodState = WAIT_FOR_LOW;
+volatile unsigned int startCount = 0;    // Timer value when entering COUNT_PERIOD
+volatile long accumulatedCount = 0;      // Sum of timer counts over multiple periods
+volatile int periodMeasurements = 0;     // Number of periods measured so far
+volatile int measurementComplete = 0;    // Flag indicating a complete measurement
+
+const int n = 100;  // Number of periods to measure before finalizing the reading
+
+
 void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 {
 	IFS0CLR=_IFS0_T1IF_MASK; // Clear timer 1 interrupt flag, bit 4 of IFS0
     
 
 	ISR_cnt++;
+    ISR_cnt2++;
 
     // Turn off pins when ISR_cnt matches their respective PWM values
     if (ISR_cnt == ISR_pwm2) {
@@ -76,6 +100,32 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
         LATBbits.LATB4 = 1; // Turn on RB4 (PWM output, pin 11)
         LATAbits.LATA4 = 1; // Turn on RA4 (PWM output, pin 12)
     }
+
+    if(ISR_cnt2<ISR_pwm5)
+	{
+		LATBbits.LATB2 = 1;
+	}
+	else
+	{
+		LATBbits.LATB2 = 0;
+	}
+
+	if(ISR_cnt2<ISR_pwm6)
+	{
+		LATBbits.LATB0 = 1;
+	}
+	else
+	{
+		LATBbits.LATB0 = 0;
+	}
+
+	if(ISR_cnt2>=2000)
+	{
+		ISR_cnt2=0; // 2000 * 10us=20ms
+		ISR_frc++;
+	}
+
+    
 }
 
 //SetupTimer
@@ -98,17 +148,18 @@ void SetupTimer1(void)
 
 
 /*##################################*/
-#define PIN_PERIOD (PORTB&(1<<5))
+#define PIN_PERIOD (PORTB&(1<<6)) // for pin 15
 // GetPeriod() seems to work fine for frequencies between 200Hz and 700kHz.
+
 long int GetPeriod (int n)
 {
 	int i;
 	unsigned int saved_TCNT1a, saved_TCNT1b;
-	
     _CP0_SET_COUNT(0); // resets the core timer count
 	while (PIN_PERIOD!=0) // Wait for square wave to be 0
 	{
 		if(_CP0_GET_COUNT() > (SYSCLK/8)) return 0;
+        
 	}
 
     _CP0_SET_COUNT(0); // resets the core timer count
@@ -133,7 +184,40 @@ long int GetPeriod (int n)
 	return  _CP0_GET_COUNT();
 }
 
+/**/
 
+void updatePeriodMeasurement(void) {
+    switch (periodState) {
+        case WAIT_FOR_LOW:
+            if (PIN_PERIOD == 0) {
+                periodState = WAIT_FOR_HIGH;
+            }
+            break;
+            
+        case WAIT_FOR_HIGH:
+            if (PIN_PERIOD != 0) {
+                startCount = _CP0_GET_COUNT();
+                periodState = COUNT_PERIOD;
+            }
+            break;
+            
+        case COUNT_PERIOD:
+            if (PIN_PERIOD == 0) {
+                unsigned int currentCount = _CP0_GET_COUNT();
+                accumulatedCount += (currentCount - startCount);
+                periodMeasurements++;
+                
+                if (periodMeasurements >= n) {
+                    measurementComplete = 1;
+                    periodState = WAIT_FOR_LOW;
+                } else {
+                    periodState = WAIT_FOR_HIGH;
+                }
+            }
+            break;
+    }
+}
+*/
 void UART2Configure(int baud_rate)
 {
     // Peripheral Pin Select
@@ -461,32 +545,80 @@ void ReceptionOff (void)
 	LATB |= 1<<14; // 'SET' pin of JDY40 to 1 is normal operation mode.
 }
 
+int hasElapsed(volatile unsigned int *start_time, int ms) {
+    unsigned int ticks = (SYSCLK / 2000) * ms; // Core timer is half SYSCLK
+    if ((_CP0_GET_COUNT() - *start_time) > ticks) {
+        *start_time = _CP0_GET_COUNT(); // reset timer
+        return 1;
+    }
+    return 0;
+}
+
 void main(void)
 {
     // init motor
 	volatile unsigned long t=0;
     int adcval;
     long int v;
-	unsigned long int count, f;
 	unsigned char LED_toggle=0;
-	float up,down,left,right;
-    int button_auto,button_manual,button_coin;    
+	float up,down,left,right;   
+    float button_auto, button_manual, button_coin;
+ 
     ConfigurePins();
     SetupTimer1();
     ADCConf(); // Configure ADC
-    
-    char *token;
+    char *token;      
 	int values[5] = {0,0,0,0,0}; // To store extracted digits
     int speedx,speedy;
+    float Perimeter1,Perimeter2;
 	int i = 0;
+    /*Adding ADC definition*/
+    int adcval1,adcval2;
 
 	char buff[80];
     int cnt=0;
     char c;
+    /*Metal dector Configuration*/
+
+    long int count;
+	float T, f;
+    float r;
+    float ct,c1,c2;
+    c1=0.00000001; //10nf
+    c2 = 0.0000001; //100nf
+    float Inductor;
+    /*init servo*/
+    char buf[32];
+    int pw;
+    volatile int servo_state = 0;
+    volatile unsigned int servo_timer = 0;
+    volatile int target_pwm5 = 150;
+    volatile int target_pwm6 = 150;
+    volatile int delay_done = 0;
+    volatile int coin_latch = 0;
     
 	DDPCON = 0;
-	CFGCON = 0;
-  
+	CFGCOal    // 1: looking for low
+    // 2: looking for high (start of period)
+    // 3: looking for low
+    // 4: looking for high (end of period)
+    // 4->1: loop back to start another period measurementfor PWM5
+    ANSELBbits.ANSB2 = 0;   // Disable analog on RB2
+    TRISBbits.TRISB2 = 0;   // Set RB2 as output
+    LATBbits.LATB2 = 0;     // Initialize low
+
+    // Configure RB0 as digital output for PWM6
+    ANSELBbits.ANSB0 = 0;     // Turn off analog on RB0
+    TRISBbits.TRISB0 = 0;     // Set RB0 as output
+    LATBbits.LATB0 = 0;       // Initialize low
+
+    // Configure RA0 as digital output for megenet
+   // ANSELBbits.ANSA0 = 0;     // Turn off analog on RA0
+    TRISAbits.TRISA0 = 0;     // Set RA0 as output
+    LATAbits.LATA0 = 0;       // Initialize low
+    
+
+    CFGCON = 0;
     UART2Configure(115200);  // Configure UART2 for a baud rate of 115200
     UART1Configure(9600);  // Configure UART1 to communicate with JDY40 with a baud rate of 9600
 
@@ -515,45 +647,91 @@ void main(void)
 	SendATCommand("AT+RFC030\r\n");
 
 	cnt=0;
+    /*Initialization*/
     up=0; 
     down=0;
     right=0;
     left=0;
+    button_manual=0; //0 is mannual mode
     button_auto=0;
-    button_manual=0;
-    button_coin=0;
-    speedx=0;
-    speedy=0;
+    speedx=1;
+    speedy=1;
 	while(1)
 	{	
-      
-        printf("Speedx: %d, Speedy: %d\r\n", speedx, speedy);
-        if(speedy>1){
-            ISR_pwm1 = speedy; //pin 9 - motor1 forawrd
-            ISR_pwm2 = 1; //pin 10  -motor1 backward
-            ISR_pwm3 = speedy; //pin 11 -motor2 forward
-            ISR_pwm4 = 1; //pin 12 -motor2 backward
 
+        /*NEW CODE ADDED HERE */
+        
+    adcval1 = ADCRead(4); // note that we call pin AN4 (RB2) by it's analog number pin 6 
+    Perimeter1=(adcval1*3290L)/1023L; // 3.290 is VDD
+    adcval2 = ADCRead(5); // note that we call pin AN4 (RB2) by it's analog number pin 6 
+    Perimeter2=(adcval2*3290L)/1023L; // 3.290 is VDD
+
+
+	// period measurement
+        /*
+    if (timer_state == 0) { // check for square wave to be high
+        if (PIN_PERIOD!=0)
+        {
+            _CP0_SET_COU1T(0); // resets the core timer count
+            timer_state ==1;  s{                // check fo2 square wave to be low
+        if (PIN_PERIOD==0)
+        {
+            _if (timer_state == 2) CP0_SET_COUNT(0); // resets the core timer count
+            timer_state =!=0  state to waiting for square wave to be 0
         }
-        else if(speedy<0){
-            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-            ISR_pwm2 = -1*speedy; //pin 10  -motor1 backward
-            ISR_pwm3 = 1; //pin 11 -motor2 forward
-            ISR_pwm4 = -1*speedy; //pin 12 -motor2 backward
+    }
+    }
+      */
 
+    //Inductor: 3298765200000000000000.000000
+
+    /*updatePeriodMeasurement();  
+    if (measurementComplete) {
+        T = accumulatedCount;
+        measurementComplete = 0;
+        accumulatedCount = 0;
+        periodMeasurements = 0;
+    }
+    f=1/T;
+    ct=(c1*c1)/(c1+c2);
+    // Calculation of Inductance
+    Inductor=1/(39.4784*f*f*ct); // L=1/(4*pi^2*f^2*C) 4pi^2~39.4784
+    */
+        /*NEW CODE ADDED HERE ENDS */
+        printf("Speedx: %d, Speedy: %d, Perimeter1: %.2f, Perimeter2: %.2f, Inductor: %.2f\r", speedx, speedy, Perimeter1, Perimeter2, Inductor);
+        //printf("Inductor: %f\r", Inductor);
+        if(button_manual==0){ //when zero it is mannual mode when 1 it is auto mode
+        
+        
+
+            
+        if(speedx<0){
+            ISR_pwm1 = -1*speedx; //pin 9 - motor1 forawrd
+            ISR_pwm2 = 1; //pin 10  -motor1 backward
+            ISR_pwm3 = 1; //pin 11 -motor2 forward
+            ISR_pwm4 = -1*speedx; //pin 12 -motor2 backward
         }
         else if(speedx>1){
-            ISR_pwm1 = speedx; //pin 9 - motor1 forawrd
-            ISR_pwm2 = 1; //pin 10  -motor1 backward
-            ISR_pwm3 = 1; //pin 11 -motor2 forward
-            ISR_pwm4 = speedx; //pin 12 -motor2 backward
-        }
-        else if(speedx<0){
             ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-            ISR_pwm2 = -1*speedx; //pin 10  -motor1 backward
-            ISR_pwm3 = -1*speedx; //pin 11 -motor2 forward
+            ISR_pwm2 = speedx; //pin 10  -motor1 backward
+            ISR_pwm3 = speedx; //pin 11 -motor2 forward
             ISR_pwm4 = 1; //pin 12 -motor2 backward
         }
+        else if(speedy<0){
+            ISR_pwm1 = -1*speedy; //pin 9 - motor1 forawrd
+            ISR_pwm2 = 1; //pin 10  -motor1 backward
+            ISR_pwm3 = -1*speedy; //pin 11 -motor2 forward
+            ISR_pwm4 = 1; //pin 12 -motor2 backward
+
+        }
+        else if(speedy>1){
+            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
+            ISR_pwm2 = 1*speedy; //pin 10  -motor1 backward
+            ISR_pwm3 = 1; //pin 11 -motor2 forward
+            ISR_pwm4 = 1*speedy; //pin 12 -motor2 backward
+
+        }
+
         else{
             ISR_pwm1 = 1; //pin 9 - motor1 forawrd
             ISR_pwm2 = 1; //pin 10  -motor1 backward
@@ -561,6 +739,102 @@ void main(void)
             ISR_pwm4 = 1; //pin 12 -motor2 backward
         }
 
+        if (button_coin == 1 && coin_latch == 0 && servo_state == 0) {
+    coin_latch = 1;
+    servo_state = 1; // Start the sequence
+    servo_timer = _CP0_GET_COUNT(); // Start timer
+}
+
+        
+        if (coin_latch == 1) {
+    switch (servo_state) {
+        case 1:
+            target_pwm5 = 240;
+            target_pwm6 = 200;
+            servo_timer = _CP0_GET_COUNT();
+            servo_state = 2;
+            break;
+
+        case 2:
+            if (hasElapsed(&servo_timer, 500)) {
+                target_pwm5 = 200;
+                servo_timer = _CP0_GET_COUNT();
+                servo_state = 3;
+            }
+            break;
+
+        case 3:
+            if (ISR_pwm6 > 100) ISR_pwm6--;
+            else {
+                LATAbits.LATA0 = 1;
+                servo_timer = _CP0_GET_COUNT();
+                servo_state = 4;
+            }
+            break;
+
+        case 4:
+            if (hasElapsed(&servo_timer, 2000)) {
+                target_pwm5 = 240;
+                servo_timer = _CP0_GET_COUNT();
+                servo_state = 5;
+            }
+            break;
+
+        case 5:
+            if (ISR_pwm5 < 240) ISR_pwm5++;
+            else {
+                servo_timer = _CP0_GET_COUNT();
+                servo_state = 6;
+            }
+            break;
+
+        case 6:
+            if (ISR_pwm6 < 180) ISR_pwm6++;
+            else {
+                servo_timer = _CP0_GET_COUNT();
+                servo_state = 7;
+            }
+            break;
+
+        case 7:
+            if (hasElapsed(&servo_timer, 500)) {
+                target_pwm5 = 60;
+                servo_state = 8;
+            }
+            break;
+
+        case 8:
+            if (ISR_pwm5 > 60) ISR_pwm5--;
+            else {
+                LATAbits.LATA0 = 0;
+                servo_timer = _CP0_GET_COUNT();
+                servo_state = 9;
+            }
+            break;
+
+        case 9:
+            if (hasElapsed(&servo_timer, 3000)) {
+                target_pwm5 = 240;
+                target_pwm6 = 180;
+                servo_state = 10;
+            }
+            break;
+
+        case 10:
+            if (ISR_pwm5 < target_pwm5) ISR_pwm5++;
+            if (ISR_pwm6 > target_pwm6) ISR_pwm6--;
+            if (ISR_pwm5 == target_pwm5 && ISR_pwm6 == target_pwm6) {
+                servo_state = 0;
+                coin_latch = 0; // 
+            }
+            break;
+    }
+}
+
+
+
+        }
+        
 		if(U1STAbits.URXDA) // Something has arrived
 		{
 
@@ -570,9 +844,10 @@ void main(void)
 			if(c=='!') // Master is sending message
 			{
 				//SerialReceive1_timeout(buff, sizeof(buff)-1);
-           
+                
 
 				SerialReceive1(buff, sizeof(buff)-1);
+                
                 i = 0;
                 token = strtok(buff, " ");
                 while(token != NULL && i < 5)
@@ -583,20 +858,22 @@ void main(void)
                 }
                 speedx = values[0];
                 speedy = values[1];
-                button_auto = values[2];
-                button_manual = values[3];
+                button_manual = values[2];
+                button_auto = values[3];
                 button_coin = values[4];
   
-				if(strlen(buff)==7)
+                
+                
+				if(strlen(buff)==13)
 				{
-					printf("Master says: %s\r\n", buff);
+
+					//printf("Master says: %s\r\n", buff);
 				}
 				else
 				{
 					// Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
-					
-					printf("*** BAD MESSAGE ***: %s\r\n", buff);
-                    ClearFIFO();
+					ClearFIFO();
+					//printf("*** BAD MESSAGE ***: %s\r\n", buff);
 				}				
 			}
 			else if(c=='@') // Master wants slave data
@@ -613,6 +890,9 @@ void main(void)
 			}
 			
 		}
+        fflush(stdout); 
+        
+        
 
         
         

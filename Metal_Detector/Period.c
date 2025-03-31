@@ -14,6 +14,29 @@
 // Defines
 #define SYSCLK 40000000L
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
+
+
+
+/*Period code*/
+
+// Define possible states for our state machine
+typedef enum { 
+    WAIT_FOR_LOW,   // Waiting for the square wave to be low
+    WAIT_FOR_HIGH,  // Waiting for the square wave to go high
+    COUNT_PERIOD    // Counting time while the square wave is high
+} PeriodState;
+
+// Global variables (declared volatile as they may be modified in interrupts or concurrently)
+volatile PeriodState periodState = WAIT_FOR_LOW;
+volatile unsigned int startCount = 0;    // Timer value when entering COUNT_PERIOD
+volatile long accumulatedCount = 0;      // Sum of timer counts over multiple periods
+volatile int periodMeasurements = 0;     // Number of periods measured so far
+volatile int measurementComplete = 0;    // Flag indicating a complete measurement
+
+const int n = 100;  // Number of periods to measure before finalizing the reading
+
+
+
  
 void UART2Configure(int baud_rate)
 {
@@ -70,41 +93,80 @@ void waitms(int len)
 	while(len--) wait_1ms();
 }
 
-#define PIN_PERIOD_1 6  // RB6: bit 6
-#define PIN_PERIOD_2 0  // RB0: bit 0
+#define PIN_PERIOD (PORTB&(1<<6))
 
 // GetPeriod() works for frequencies between 200Hz and 700kHz
 
 //This is the period the code where you input function and count and
 // automatically get the period of the signal
-long int GetPeriod (int n, int pin) {
-    int i;
+long int GetPeriod (int n)
+{
+	int i;
+	unsigned int saved_TCNT1a, saved_TCNT1b;
+    _CP0_SET_COUNT(0); // resets the core timer count
+	while (PIN_PERIOD!=0) // Wait for square wave to be 0
+	{
+		if(_CP0_GET_COUNT() > (SYSCLK/8)) return 0;
+        
+	}
 
-    // Wait for the square wave to go HIGH
-    _CP0_SET_COUNT(0); // Reset core timer count
-    while ((PORTB & (1 << pin)) == 0) {
-        if (_CP0_GET_COUNT() > (SYSCLK / 4)) return 0;  // Timeout check
-    }
+    _CP0_SET_COUNT(0); // resets the core timer count
+	while (PIN_PERIOD==0) // Wait for square wave to be 1
+	{
+		if(_CP0_GET_COUNT() > (SYSCLK/8)) return 0;
+	}
+	
+    _CP0_SET_COUNT(0); // resets the core timer count
+	for(i=0; i<n; i++) // Measure the time of 'n' periods
+	{
+		while (PIN_PERIOD!=0) // Wait for square wave to be 0
+		{
+			if(_CP0_GET_COUNT() > (SYSCLK/8)) return 0;
+		}
+		while (PIN_PERIOD==0) // Wait for square wave to be 1
+		{
+			if(_CP0_GET_COUNT() > (SYSCLK/8)) return 0;
+		}
+	}
 
-    // Wait for the square wave to go LOW
-    _CP0_SET_COUNT(0); // Reset core timer count
-    while ((PORTB & (1 << pin)) != 0) {
-        if (_CP0_GET_COUNT() > (SYSCLK / 4)) return 0;  // Timeout check
-    }
-
-    // Measure time for 'n' periods
-    _CP0_SET_COUNT(0); // Reset core timer count
-    for (i = 0; i < n; i++) {
-        while ((PORTB & (1 << pin)) == 0) { // Wait for square wave HIGH
-            if (_CP0_GET_COUNT() > (SYSCLK / 4)) return 0;  // Timeout check
-        }
-        while ((PORTB & (1 << pin)) != 0) { // Wait for square wave LOW
-            if (_CP0_GET_COUNT() > (SYSCLK / 4)) return 0;  // Timeout check
-        }
-    }
-
-    return _CP0_GET_COUNT(); // Return the count of the core timer
+	return  _CP0_GET_COUNT();
 }
+
+/*
+
+void updatePeriodMeasurement(void) {
+    switch (periodState) {
+        case WAIT_FOR_LOW:
+            if (PIN_PERIOD == 0) {
+                periodState = WAIT_FOR_HIGH;
+            }
+            break;
+            
+        case WAIT_FOR_HIGH:
+            if (PIN_PERIOD != 0) {
+                startCount = _CP0_GET_COUNT();
+                periodState = COUNT_PERIOD;
+            }
+            break;
+            
+        case COUNT_PERIOD:
+            if (PIN_PERIOD == 0) {
+                unsigned int currentCount = _CP0_GET_COUNT();
+                accumulatedCount += (currentCount - startCount);
+                periodMeasurements++;
+                
+                if (periodMeasurements >= n) {
+                    measurementComplete = 1;
+                    periodState = WAIT_FOR_LOW;
+                } else {
+                    periodState = WAIT_FOR_HIGH;
+                }
+            }
+            break;
+    }
+}
+*/
+
 
 /* Pinout for DIP28 PIC32MX130:
                                           --------
@@ -154,14 +216,14 @@ void main(void)
     {
         //Connect to pin4
         //We will need two frequencies to measure the two different inductors
-		count=GetPeriod(100,PIN_PERIOD_1);
+		
+        count=GetPeriod(100);
 		if(count>0)
 		{
 			T=(count*2.0)/(SYSCLK*100.0);
             f=1/T;
             ct=(c1*c1)/(c1+c2);
             Inductor=1/(39.4784*f*f*ct); // L=1/(4*pi^2*f^2*C) 4pi^2~39.4784
-            /*##########################*/
             //This is where in the code where we will measure inductor that will
             //directly tell us if metal content is present 
 
@@ -171,6 +233,21 @@ void main(void)
 		{
 			printf("NO SIGNAL                     \r");
 		}
+
+        
+        /*updatePeriodMeasurement();  
+        if (measurementComplete) {
+            T = accumulatedCount;
+            measurementComplete = 0;
+            accumulatedCount = 0;
+            periodMeasurements = 0;
+        }
+        f=1/T;
+        ct=(c1*c1)/(c1+c2);
+        Inductor=1/(39.4784*f*f*ct); // L=1/(4*pi^2*f^2*C) 4pi^2~39.4784
+        printf("Inductor=%f\r\n", Inductor);
+        */
+
 		fflush(stdout); // GCC peculiarities: need to flush stdout to get string out without a '\n'
 		waitms(200);
         waitms(200);

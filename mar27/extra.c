@@ -82,7 +82,7 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 void SetupTimer1(void)
 {
     __builtin_disable_interrupts();
-    PR1 = (SYSCLK / 10000L) - 1; // Set Timer1 period for 10 kHz PWM
+    PR1 = (SYSCLK / 5000L) - 1; // Set Timer1 period for 10 kHz PWM
     TMR1 = 0;
     T1CONbits.TCKPS = 0; // No prescaler
     T1CONbits.TCS = 0;   // Use internal clock
@@ -469,16 +469,11 @@ void main(void)
     long int v;
 	unsigned long int count, f;
 	unsigned char LED_toggle=0;
-	float up,down,left,right;
-    int button_auto,button_manual,button_coin;    
+	float up,down,left,right;    
     ConfigurePins();
     SetupTimer1();
     ADCConf(); // Configure ADC
-    
-    char *token;
-	int values[5] = {0,0,0,0,0}; // To store extracted digits
-    int speedx,speedy;
-	int i = 0;
+
 
 	char buff[80];
     int cnt=0;
@@ -515,51 +510,10 @@ void main(void)
 	SendATCommand("AT+RFC030\r\n");
 
 	cnt=0;
-    up=0; 
-    down=0;
-    right=0;
-    left=0;
-    button_auto=0;
-    button_manual=0;
-    button_coin=0;
-    speedx=0;
-    speedy=0;
 	while(1)
 	{	
       
-        printf("Speedx: %d, Speedy: %d\r\n", speedx, speedy);
-        if(speedy>1){
-            ISR_pwm1 = speedy; //pin 9 - motor1 forawrd
-            ISR_pwm2 = 1; //pin 10  -motor1 backward
-            ISR_pwm3 = speedy; //pin 11 -motor2 forward
-            ISR_pwm4 = 1; //pin 12 -motor2 backward
-
-        }
-        else if(speedy<0){
-            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-            ISR_pwm2 = -1*speedy; //pin 10  -motor1 backward
-            ISR_pwm3 = 1; //pin 11 -motor2 forward
-            ISR_pwm4 = -1*speedy; //pin 12 -motor2 backward
-
-        }
-        else if(speedx>1){
-            ISR_pwm1 = speedx; //pin 9 - motor1 forawrd
-            ISR_pwm2 = 1; //pin 10  -motor1 backward
-            ISR_pwm3 = 1; //pin 11 -motor2 forward
-            ISR_pwm4 = speedx; //pin 12 -motor2 backward
-        }
-        else if(speedx<0){
-            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-            ISR_pwm2 = -1*speedx; //pin 10  -motor1 backward
-            ISR_pwm3 = -1*speedx; //pin 11 -motor2 forward
-            ISR_pwm4 = 1; //pin 12 -motor2 backward
-        }
-        else{
-            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-            ISR_pwm2 = 1; //pin 10  -motor1 backward
-            ISR_pwm3 = 1; //pin 11 -motor2 forward
-            ISR_pwm4 = 1; //pin 12 -motor2 backward
-        }
+        
 
 		if(U1STAbits.URXDA) // Something has arrived
 		{
@@ -573,20 +527,6 @@ void main(void)
            
 
 				SerialReceive1(buff, sizeof(buff)-1);
-                i = 0;
-                token = strtok(buff, " ");
-                while(token != NULL && i < 5)
-                {
-                    values[i] = atoi(token);
-                    token = strtok(NULL, " ");
-                    i++;
-                }
-                speedx = values[0];
-                speedy = values[1];
-                button_auto = values[2];
-                button_manual = values[3];
-                button_coin = values[4];
-  
 				if(strlen(buff)==7)
 				{
 					printf("Master says: %s\r\n", buff);
@@ -594,9 +534,8 @@ void main(void)
 				else
 				{
 					// Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
-					
+					ClearFIFO();
 					printf("*** BAD MESSAGE ***: %s\r\n", buff);
-                    ClearFIFO();
 				}				
 			}
 			else if(c=='@') // Master wants slave data

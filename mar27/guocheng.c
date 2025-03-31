@@ -1,4 +1,3 @@
-
 #include <XC.h>
 #include <sys/attribs.h>
 #include <stdio.h>
@@ -37,7 +36,7 @@
 // Defines
 #define SYSCLK 40000000L
 //#define DEF_FREQ 16000L
-#define FREQ 100000L // We need the ISR for timer 1 every 10 us
+#define FREQ 10000L
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 #define Baud1BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
@@ -68,7 +67,7 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
     }
 
     // Reset ISR_cnt and turn on all pins at the start of the PWM cycle
-    if (ISR_cnt >= 100) // 2000 * 10us = 20ms
+    if (ISR_cnt >= 100) // 10 * 10us = 100us
     {
         ISR_cnt = 0;
         LATAbits.LATA2 = 1; // Turn on RA2 (PWM output, pin 9)
@@ -82,7 +81,7 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 void SetupTimer1(void)
 {
     __builtin_disable_interrupts();
-    PR1 = (SYSCLK / 10000L) - 1; // Set Timer1 period for 10 kHz PWM
+    PR1 = (SYSCLK / FREQ) - 1;
     TMR1 = 0;
     T1CONbits.TCKPS = 0; // No prescaler
     T1CONbits.TCS = 0;   // Use internal clock
@@ -98,7 +97,7 @@ void SetupTimer1(void)
 
 
 /*##################################*/
-#define PIN_PERIOD (PORTB&(1<<5))
+#define PIN_PERIOD (PORTB&(1<<6)) // for pin 15
 // GetPeriod() seems to work fine for frequencies between 200Hz and 700kHz.
 long int GetPeriod (int n)
 {
@@ -467,23 +466,32 @@ void main(void)
 	volatile unsigned long t=0;
     int adcval;
     long int v;
-	unsigned long int count, f;
 	unsigned char LED_toggle=0;
-	float up,down,left,right;
-    int button_auto,button_manual,button_coin;    
+	float up,down,left,right,button_auto,button_manual,button_coin;    
     ConfigurePins();
     SetupTimer1();
     ADCConf(); // Configure ADC
-    
     char *token;
 	int values[5] = {0,0,0,0,0}; // To store extracted digits
     int speedx,speedy;
+    float Perimeter1,Perimeter2;
 	int i = 0;
+    /*Adding ADC definition*/
+    int adcval1,adcval2;
 
 	char buff[80];
     int cnt=0;
     char c;
-    
+    /*Metal dector Configuration*/
+
+    long int count;
+	float T, f;
+    float r;
+    float ct,c1,c2;
+    c1=0.00000001; //10nf
+    c2 = 0.0000001; //100nf
+    float Inductor;
+    int a1,a2,a3,a4;
 	DDPCON = 0;
 	CFGCON = 0;
   
@@ -511,10 +519,11 @@ void main(void)
 
 	// We should select an unique device ID.  The device ID can be a hex
 	// number from 0x0000 to 0xFFFF.  In this case is set to 0xABBA
-	SendATCommand("AT+DVIDCACC\r\n");  
+	SendATCommand("AT+DVIDBEEF\r\n");  
 	SendATCommand("AT+RFC030\r\n");
 
 	cnt=0;
+    /*Initialization*/
     up=0; 
     down=0;
     right=0;
@@ -522,45 +531,76 @@ void main(void)
     button_auto=0;
     button_manual=0;
     button_coin=0;
-    speedx=0;
-    speedy=0;
+    speedx=1;
+    speedy=1;
 	while(1)
 	{	
-      
-        printf("Speedx: %d, Speedy: %d\r\n", speedx, speedy);
-        if(speedy>1){
-            ISR_pwm1 = speedy; //pin 9 - motor1 forawrd
-            ISR_pwm2 = 1; //pin 10  -motor1 backward
-            ISR_pwm3 = speedy; //pin 11 -motor2 forward
-            ISR_pwm4 = 1; //pin 12 -motor2 backward
 
-        }
-        else if(speedy<0){
-            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-            ISR_pwm2 = -1*speedy; //pin 10  -motor1 backward
-            ISR_pwm3 = 1; //pin 11 -motor2 forward
-            ISR_pwm4 = -1*speedy; //pin 12 -motor2 backward
+        /*NEW CODE ADDED HERE */
+        
+        adcval1 = ADCRead(4); // note that we call pin AN4 (RB2) by it's analog number pin 6 
+		Perimeter1=(adcval1*3290L)/1023L; // 3.290 is VDD
+        adcval2 = ADCRead(5); // note that we call pin AN4 (RB2) by it's analog number pin 6 
+		Perimeter2=(adcval2*3290L)/1023L; // 3.290 is VDD
 
-        }
-        else if(speedx>1){
-            ISR_pwm1 = speedx; //pin 9 - motor1 forawrd
-            ISR_pwm2 = 1; //pin 10  -motor1 backward
-            ISR_pwm3 = 1; //pin 11 -motor2 forward
-            ISR_pwm4 = speedx; //pin 12 -motor2 backward
-        }
-        else if(speedx<0){
-            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-            ISR_pwm2 = -1*speedx; //pin 10  -motor1 backward
-            ISR_pwm3 = -1*speedx; //pin 11 -motor2 forward
-            ISR_pwm4 = 1; //pin 12 -motor2 backward
-        }
-        else{
-            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-            ISR_pwm2 = 1; //pin 10  -motor1 backward
-            ISR_pwm3 = 1; //pin 11 -motor2 forward
-            ISR_pwm4 = 1; //pin 12 -motor2 backward
-        }
+        //Period calculations and display
+        /*
+        count=GetPeriod(100);
+		if(count>0)
+		{
+			T=(count*2.0)/(SYSCLK*100.0);
+            f=1/T;
+            ct=(c1*c1)/(c1+c2);
+            //Calculation of Inductance
+            Inductor=1/(39.4784*f*f*ct); // L=1/(4*pi^2*f^2*C) 4pi^2~39.4784
+       
+            //This is where in the code where we will measure inductor that will
+            //directly tell us if metal content is present 
+		}
+        */
+        //
+        /*NEW CODE ADDED HERE ENDS */
 
+        //If issue look at this informatoin
+	
+        //printf("Speedx: %d, Speedy: %d,Perimeter1: %f,Perimeter2: %f,Inductor: %f\r\n", speedx, speedy,Perimeter1,Perimeter2,Inductor);
+       printf("ISR_pwm1: %d, ISR_pwm2: %d, ISR_pwm3: %d, ISR_pwm4: %d\r\n", ISR_pwm1, ISR_pwm2, ISR_pwm3, ISR_pwm4);
+
+                 
+       if(speedx<0){
+        ISR_pwm1 = -1*speedx; //pin 9 - motor1 forawrd
+        ISR_pwm2 = 1; //pin 10  -motor1 backward
+        ISR_pwm3 = 1; //pin 11 -motor2 forward
+        ISR_pwm4 = -1*speedx; //pin 12 -motor2 backward
+    }
+    else if(speedx>1){
+        ISR_pwm1 = 1; //pin 9 - motor1 forawrd
+        ISR_pwm2 = speedx; //pin 10  -motor1 backward
+        ISR_pwm3 = speedx; //pin 11 -motor2 forward
+        ISR_pwm4 = 1; //pin 12 -motor2 backward
+    }
+    else if(speedy<0){
+        ISR_pwm1 = -1*speedy; //pin 9 - motor1 forawrd
+        ISR_pwm2 = 1; //pin 10  -motor1 backward
+        ISR_pwm3 = -1*speedy; //pin 11 -motor2 forward
+        ISR_pwm4 = 1; //pin 12 -motor2 backward
+
+    }
+    else if(speedy>1){
+        ISR_pwm1 = 1; //pin 9 - motor1 forawrd
+        ISR_pwm2 = 1*speedy; //pin 10  -motor1 backward
+        ISR_pwm3 = 1; //pin 11 -motor2 forward
+        ISR_pwm4 = 1*speedy; //pin 12 -motor2 backward
+
+    }
+
+    else{
+        ISR_pwm1 = 1; //pin 9 - motor1 forawrd
+        ISR_pwm2 = 1; //pin 10  -motor1 backward
+        ISR_pwm3 = 1; //pin 11 -motor2 forward
+        ISR_pwm4 = 1; //pin 12 -motor2 backward
+    }
+        
 		if(U1STAbits.URXDA) // Something has arrived
 		{
 
@@ -570,9 +610,10 @@ void main(void)
 			if(c=='!') // Master is sending message
 			{
 				//SerialReceive1_timeout(buff, sizeof(buff)-1);
-           
+                
 
 				SerialReceive1(buff, sizeof(buff)-1);
+                
                 i = 0;
                 token = strtok(buff, " ");
                 while(token != NULL && i < 5)
@@ -587,16 +628,18 @@ void main(void)
                 button_manual = values[3];
                 button_coin = values[4];
   
-				if(strlen(buff)==7)
+                
+                
+				if(strlen(buff)==13)
 				{
+
 					printf("Master says: %s\r\n", buff);
 				}
 				else
 				{
 					// Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
-					
+					ClearFIFO();
 					printf("*** BAD MESSAGE ***: %s\r\n", buff);
-                    ClearFIFO();
 				}				
 			}
 			else if(c=='@') // Master wants slave data
@@ -613,6 +656,7 @@ void main(void)
 			}
 			
 		}
+        
 
         
         

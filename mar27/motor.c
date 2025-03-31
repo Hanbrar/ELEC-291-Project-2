@@ -308,13 +308,13 @@ void main(void)
 		}
 		else
 		{
-			uart_puts("NO SIGNAL                     \r");
+			uart_puts("NO SIGNAL1                     \r");
 		}	
 
 		// Change the servo PWM signals
-        ISR_pwm1 = 1;
+        ISR_pwm1 = 100;
         ISR_pwm2 = 1;
-		ISR_pwm3 = 1;
+		ISR_pwm3 = 100;
         ISR_pwm4 = 1;
 		
 		//if (ISR_pwm1<8000)

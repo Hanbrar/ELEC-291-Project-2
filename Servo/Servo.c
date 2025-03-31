@@ -14,8 +14,8 @@
 #define FREQ 100000L // We need the ISR for timer 1 every 10 us
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
-volatile int ISR_pwm1=150, ISR_pwm2=150;
-volatile int ISR_pw=100, ISR_cnt=0, ISR_frc;
+volatile int ISR_pwm4=150, ISR_pwm5=150;
+volatile int ISR_pw=100, ISR_cnt2=0, ISR_frc;
 
 // The Interrupt Service Routine for timer 1 is used to generate one or more standard
 // hobby servo signals.  The servo signal has a fixed period of 20ms and a pulse width
@@ -196,16 +196,16 @@ void main (void)
     	if(state == 0)
          {
               // Move to extreme position:
-              ISR_pwm1 = 200;   // Servo 1 gets a 2.0ms pulse (assuming 10us per count)
-              ISR_pwm2 = 100;   // Servo 2 gets a 1.0ms pulse
+              ISR_pwm4 = 200;   // Servo 1 gets a 2.0ms pulse (assuming 10us per count)
+              ISR_pwm5 = 100;   // Servo 2 gets a 1.0ms pulse
               waitms(2000);     // Hold for 2 seconds
               state = 1;
          }
          else
          {
               // Return to starting position:
-              ISR_pwm1 = 100;   // Servo 1 gets a 1.0ms pulse
-              ISR_pwm2 = 200;   // Servo 2 gets a 2.0ms pulse
+              ISR_pwm4 = 100;   // Servo 1 gets a 1.0ms pulse
+              ISR_pwm5 = 200;   // Servo 2 gets a 2.0ms pulse
               waitms(2000);     // Hold for 2 seconds
               state = 0;
 	}
