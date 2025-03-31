@@ -64,7 +64,7 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
     }
 
     // Reset ISR_cnt and turn on all pins at the start of the PWM cycle
-    if (ISR_cnt >= 10) 
+    if (ISR_cnt >= 100) 
     {
         ISR_cnt = 0;
 
@@ -313,9 +313,9 @@ void main(void)
 
 		// Change the servo PWM signals
         ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-        ISR_pwm2 = 5; //pin 10  -motor1 backward
-		ISR_pwm3 = 1; //pin 11 -motor2 forward
-        ISR_pwm4 = 10; //pin 12 -motor2 backward
+        ISR_pwm2 = 1; //pin 10  -motor1 backward
+		ISR_pwm3 = 100; //pin 11 -motor2 forward
+        ISR_pwm4 = 100; //pin 12 -motor2 backward
 		
 		//if (ISR_pwm1<8000)
 		//{
