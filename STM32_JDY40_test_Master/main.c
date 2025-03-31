@@ -238,7 +238,7 @@ int main(void)
     SendATCommand("AT+POWE\r\n");
     SendATCommand("AT+CLSS\r\n");
 
-    SendATCommand("AT+DVIDBEEF\r\n");
+    SendATCommand("AT+DVIDCACC\r\n");
     SendATCommand("AT+RFC030\r\n");
 
     while(1)
