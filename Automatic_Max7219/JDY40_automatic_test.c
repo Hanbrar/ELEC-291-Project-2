@@ -894,7 +894,7 @@
 //             }    
 //     }
 // }
-
+#include <stdint.h>
 #include <XC.h>
 #include <sys/attribs.h>
 
@@ -951,7 +951,8 @@ void MAX7219_Init() {
 
 int main(void) {
   SPI_Init();
-  MAX7219_Init();
+  MAX7219_Init();	
+  
 
   int i; // Declare outside loop for C89 compatibility
   for (i = 0; i < 8; i++) {
