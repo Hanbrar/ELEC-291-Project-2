@@ -64,7 +64,7 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
     }
 
     // Reset ISR_cnt and turn on all pins at the start of the PWM cycle
-    if (ISR_cnt >= 100) // 2000 * 10us = 20ms
+    if (ISR_cnt >= 10) 
     {
         ISR_cnt = 0;
 
@@ -78,7 +78,7 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 void SetupTimer1(void)
 {
     __builtin_disable_interrupts();
-    PR1 = (SYSCLK / 10000L) - 1; // Set Timer1 period for 10 kHz PWM
+    PR1 = (SYSCLK / FREQ) - 1; // Set Timer1 period for 10 kHz PWM
     TMR1 = 0;
     T1CONbits.TCKPS = 0; // No prescaler
     T1CONbits.TCS = 0;   // Use internal clock
@@ -313,9 +313,9 @@ void main(void)
 
 		// Change the servo PWM signals
         ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-        ISR_pwm2 = 50; //pin 10  -motor1 backward
-		ISR_pwm3 = 50; //pin 11 -motor2 forward
-        ISR_pwm4 = 1; //pin 12 -motor2 backward
+        ISR_pwm2 = 5; //pin 10  -motor1 backward
+		ISR_pwm3 = 1; //pin 11 -motor2 forward
+        ISR_pwm4 = 10; //pin 12 -motor2 backward
 		
 		//if (ISR_pwm1<8000)
 		//{

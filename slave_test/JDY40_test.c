@@ -1,4 +1,3 @@
-
 #include <XC.h>
 #include <sys/attribs.h>
 #include <stdio.h>
@@ -32,108 +31,13 @@
  
 #pragma config FWDTEN = OFF         // Watchdog Timer Disabled
 #pragma config FPBDIV = DIV_1       // PBCLK = SYCLK
-#pragma config FSOSCEN = OFF
 
 // Defines
 #define SYSCLK 40000000L
-//#define DEF_FREQ 16000L
-#define FREQ 100000L // We need the ISR for timer 1 every 10 us
+#define DEF_FREQ 16000L
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 #define Baud1BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
-
-volatile int ISR_pwm1=150, ISR_pwm2=150, ISR_pwm3=150, ISR_pwm4=150, ISR_cnt=0;
-
-// The Interrupt Service Routine for timer 1 is used to generate one or more standard
-// hobby servo signals.  The servo signal has a fixed period of 20ms and a pulse width
-// between 0.6ms and 2.4ms.
-void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
-{
-	IFS0CLR=_IFS0_T1IF_MASK; // Clear timer 1 interrupt flag, bit 4 of IFS0
-    
-
-	ISR_cnt++;
-
-    // Turn off pins when I-SR_cnt matches their respective PWM values
-    if (ISR_cnt == ISR_pwm2) {
-        LATAbits.LATA3 = 0; // Turn off RA3 (PWM output, pin 10)
-    }
-    if (ISR_cnt == ISR_pwm3) {
-        LATBbits.LATB4 = 0; // Turn off RB4 (PWM output, pin 11)
-    }
-    if (ISR_cnt == ISR_pwm1) {
-        LATAbits.LATA2 = 0; // Turn off RA2 (PWM output, pin 9)
-    }
-    if (ISR_cnt == ISR_pwm4) {
-        LATAbits.LATA4 = 0; // Turn off RA4 (PWM output, pin 12)
-    }
-
-    // Reset ISR_cnt and turn on all pins at the start of the PWM cycle
-    if (ISR_cnt >= 100) // 2000 * 10us = 20ms
-    {
-        ISR_cnt = 0;
-        LATAbits.LATA2 = 1; // Turn on RA2 (PWM output, pin 9)
-        LATAbits.LATA3 = 1; // Turn on RA3 (PWM output, pin 10)
-        LATBbits.LATB4 = 1; // Turn on RB4 (PWM output, pin 11)
-        LATAbits.LATA4 = 1; // Turn on RA4 (PWM output, pin 12)
-    }
-}
-
-//SetupTimer
-void SetupTimer1(void)
-{
-    __builtin_disable_interrupts();
-    PR1 = (SYSCLK / 10000L) - 1; // Set Timer1 period for 10 kHz PWM
-    TMR1 = 0;
-    T1CONbits.TCKPS = 0; // No prescaler
-    T1CONbits.TCS = 0;   // Use internal clock
-    T1CONbits.ON = 1;
-    IPC1bits.T1IP = 5;
-    IPC1bits.T1IS = 0;
-    IFS0bits.T1IF = 0;
-    IEC0bits.T1IE = 1;
-    
-    INTCONbits.MVEC = 1; // Enable multi-vector interrupts
-    __builtin_enable_interrupts();
-}
-
-
-/*##################################*/
-#define PIN_PERIOD (PORTB&(1<<5))
-// GetPeriod() seems to work fine for frequencies between 200Hz and 700kHz.
-long int GetPeriod (int n)
-{
-	int i;
-	unsigned int saved_TCNT1a, saved_TCNT1b;
-	
-    _CP0_SET_COUNT(0); // resets the core timer count
-	while (PIN_PERIOD!=0) // Wait for square wave to be 0
-	{
-		if(_CP0_GET_COUNT() > (SYSCLK/8)) return 0;
-	}
-
-    _CP0_SET_COUNT(0); // resets the core timer count
-	while (PIN_PERIOD==0) // Wait for square wave to be 1
-	{
-		if(_CP0_GET_COUNT() > (SYSCLK/8)) return 0;
-	}
-	
-    _CP0_SET_COUNT(0); // resets the core timer count
-	for(i=0; i<n; i++) // Measure the time of 'n' periods
-	{
-		while (PIN_PERIOD!=0) // Wait for square wave to be 0
-		{
-			if(_CP0_GET_COUNT() > (SYSCLK/8)) return 0;
-		}
-		while (PIN_PERIOD==0) // Wait for square wave to be 1
-		{
-			if(_CP0_GET_COUNT() > (SYSCLK/8)) return 0;
-		}
-	}
-
-	return  _CP0_GET_COUNT();
-}
-
-
+ 
 void UART2Configure(int baud_rate)
 {
     // Peripheral Pin Select
@@ -145,68 +49,6 @@ void UART2Configure(int baud_rate)
     U2BRG = Baud2BRG(baud_rate); // U2BRG = (FPb / (16*baud)) - 1
     
     U2MODESET = 0x8000;     // enable UART2
-}
-
-void uart_puts(char * s)
-{
-	while(*s)
-	{
-		putchar(*s);
-		s++;
-	}
-}
-
-char HexDigit[]="0123456789ABCDEF";
-void PrintNumber(long int val, int Base, int digits)
-{ 
-	int j;
-	#define NBITS 32
-	char buff[NBITS+1];
-	buff[NBITS]=0;
-
-	j=NBITS-1;
-	while ( (val>0) | (digits>0) )
-	{
-		buff[j--]=HexDigit[val%Base];
-		val/=Base;
-		if(digits!=0) digits--;
-	}
-	uart_puts(&buff[j+1]);
-}
-/*ADC code*/
-/*################################*/
-// Good information about ADC in PIC32 found here:
-// http://umassamherstm5.org/tech-tutorials/pic32-tutorials/pic32mx220-tutorials/adc
-void ADCConf(void)
-{
-    AD1CON1CLR = 0x8000;    // disable ADC before configuration
-    AD1CON1 = 0x00E0;       // internal counter ends sampling and starts conversion (auto-convert), manual sample
-    AD1CON2 = 0;            // AD1CON2<15:13> set voltage reference to pins AVSS/AVDD
-    AD1CON3 = 0x0f01;       // TAD = 4*TPB, acquisition time = 15*TAD 
-    AD1CON1SET=0x8000;      // Enable ADC
-}
-
-int ADCRead(char analogPIN)
-{
-    AD1CHS = analogPIN << 16;    // AD1CHS<16:19> controls which analog pin goes to the ADC
- 
-    AD1CON1bits.SAMP = 1;        // Begin sampling
-    while(AD1CON1bits.SAMP);     // wait until acquisition is done
-    while(!AD1CON1bits.DONE);    // wait until conversion done
- 
-    return ADC1BUF0;             // result stored in ADC1BUF0
-}
-
-void PrintFixedPoint (unsigned long number, int decimals)
-{
-	int divider=1, j;
-	
-	j=decimals;
-	while(j--) divider*=10;
-	
-	PrintNumber(number/divider, 10, 1);
-	uart_puts(".");
-	PrintNumber(number%divider, 10, decimals);
 }
 
 // Needed to by scanf() and gets()
@@ -258,7 +100,7 @@ int UART1Configure(int desired_baud)
 
 	// Do what the caption of FIGURE 11-2 in '60001168J.pdf' says: "For input only, PPS functionality does not have
     // priority over TRISx settings. Therefore, when configuring RPn pin for input, the corresponding bit in the
-    // TRISx register must also be configured for input (set to  1 )."
+    // TRISx register must also be configured for input (set to �1�)."
     
     ANSELB &= ~(1<<13); // Set RB13 as a digital I/O
     TRISB |= (1<<13);   // configure pin RB13 as input
@@ -284,37 +126,6 @@ int UART1Configure(int desired_baud)
     U1MODESET = 0x8000;     // enable UART1
 
     return actual_baud;
-}
-
-void ConfigurePins(void)
-{
-    // Configure pins as analog inputs
-    ANSELBbits.ANSB2 = 1;   // set RB2 (AN4, pin 6 of DIP28) as analog pin
-    TRISBbits.TRISB2 = 1;   // set RB2 as an input
-    ANSELBbits.ANSB3 = 1;   // set RB3 (AN5, pin 7 of DIP28) as analog pin
-    TRISBbits.TRISB3 = 1;   // set RB3 as an input
-    
-	// Configure digital input pin to measure signal period
-	ANSELB &= ~(1<<5); // Set RB5 as a digital I/O (pin 14 of DIP28)
-    TRISB |= (1<<5);   // configure pin RB5 as input
-    CNPUB |= (1<<5);   // Enable pull-up resistor for RB5
-    
-    // We can do the three lines above using this instead:
-    // ANSELBbits.ANSELB5=0;  Not needed because RB5 can not be analog input?
-    // TRISBbits.TRISB5=1;
-    // CNPUBbits.CNPUB5=1;
-    
-    // Configure output pins
-	TRISAbits.TRISA0 = 0; // pin  2 of DIP28
-	TRISAbits.TRISA1 = 0; // pin  3 of DIP28
-	TRISBbits.TRISB0 = 0; // pin  4 of DIP28
-	TRISBbits.TRISB1 = 0; // pin  5 of DIP28
-	TRISAbits.TRISA2 = 0; // pin  9 of DIP28
-	TRISAbits.TRISA3 = 0; // pin 10 of DIP28
-	TRISBbits.TRISB4 = 0; // pin 11 of DIP28
-	TRISAbits.TRISA4 = 0; // pin 12 of DIP28
-	
-	INTCONbits.MVEC = 1;
 }
 
 void putc1 (char c)
@@ -421,10 +232,7 @@ void wait_1ms(void)
     // get the core timer count
     while ( _CP0_GET_COUNT() < (SYSCLK/(2*1000)) );
 }
-void waitms(int len)
-{
-	while(len--) wait_1ms();
-}
+
 void delayms(int len)
 {
 	while(len--) wait_1ms();
@@ -463,23 +271,6 @@ void ReceptionOff (void)
 
 void main(void)
 {
-    // init motor
-	volatile unsigned long t=0;
-    int adcval;
-    long int v;
-	unsigned long int count, f;
-	unsigned char LED_toggle=0;
-	float up,down,left,right;
-    int button_auto,button_manual,button_coin;    
-    ConfigurePins();
-    SetupTimer1();
-    ADCConf(); // Configure ADC
-    
-    char *token;
-	int values[5] = {0,0,0,0,0}; // To store extracted digits
-    int speedx,speedy;
-	int i = 0;
-
 	char buff[80];
     int cnt=0;
     char c;
@@ -511,82 +302,19 @@ void main(void)
 
 	// We should select an unique device ID.  The device ID can be a hex
 	// number from 0x0000 to 0xFFFF.  In this case is set to 0xABBA
-	SendATCommand("AT+DVIDCACC\r\n");  
-	SendATCommand("AT+RFC030\r\n");
+	SendATCommand("AT+DVIDCAFE\r\n");  
 
 	cnt=0;
-    up=0; 
-    down=0;
-    right=0;
-    left=0;
-    button_auto=0;
-    button_manual=0;
-    button_coin=0;
-    speedx=0;
-    speedy=0;
 	while(1)
 	{	
-      
-        printf("Speedx: %d, Speedy: %d\r\n", speedx, speedy);
-        if(speedy>1){
-            ISR_pwm1 = speedy; //pin 9 - motor1 forawrd
-            ISR_pwm2 = 1; //pin 10  -motor1 backward
-            ISR_pwm3 = speedy; //pin 11 -motor2 forward
-            ISR_pwm4 = 1; //pin 12 -motor2 backward
-
-        }
-        else if(speedy<0){
-            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-            ISR_pwm2 = -1*speedy; //pin 10  -motor1 backward
-            ISR_pwm3 = 1; //pin 11 -motor2 forward
-            ISR_pwm4 = -1*speedy; //pin 12 -motor2 backward
-
-        }
-        else if(speedx>1){
-            ISR_pwm1 = speedx; //pin 9 - motor1 forawrd
-            ISR_pwm2 = 1; //pin 10  -motor1 backward
-            ISR_pwm3 = 1; //pin 11 -motor2 forward
-            ISR_pwm4 = speedx; //pin 12 -motor2 backward
-        }
-        else if(speedx<0){
-            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-            ISR_pwm2 = -1*speedx; //pin 10  -motor1 backward
-            ISR_pwm3 = -1*speedx; //pin 11 -motor2 forward
-            ISR_pwm4 = 1; //pin 12 -motor2 backward
-        }
-        else{
-            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-            ISR_pwm2 = 1; //pin 10  -motor1 backward
-            ISR_pwm3 = 1; //pin 11 -motor2 forward
-            ISR_pwm4 = 1; //pin 12 -motor2 backward
-        }
-
+        
 		if(U1STAbits.URXDA) // Something has arrived
 		{
-
-            
-            
 			c=U1RXREG;
 			if(c=='!') // Master is sending message
 			{
 				//SerialReceive1_timeout(buff, sizeof(buff)-1);
-           
-
 				SerialReceive1(buff, sizeof(buff)-1);
-                i = 0;
-                token = strtok(buff, " ");
-                while(token != NULL && i < 5)
-                {
-                    values[i] = atoi(token);
-                    token = strtok(NULL, " ");
-                    i++;
-                }
-                speedx = values[0];
-                speedy = values[1];
-                button_auto = values[2];
-                button_manual = values[3];
-                button_coin = values[4];
-  
 				if(strlen(buff)==7)
 				{
 					printf("Master says: %s\r\n", buff);
@@ -594,9 +322,8 @@ void main(void)
 				else
 				{
 					// Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
-					
+					ClearFIFO();
 					printf("*** BAD MESSAGE ***: %s\r\n", buff);
-                    ClearFIFO();
 				}				
 			}
 			else if(c=='@') // Master wants slave data
@@ -613,10 +340,5 @@ void main(void)
 			}
 			
 		}
-
-        
-        
 	}
-
-
 }
