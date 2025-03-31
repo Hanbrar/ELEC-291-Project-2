@@ -163,7 +163,8 @@ void main (void)
 {
     char buf[32];
     int pw;
-    int state;
+	int count1;
+	int state = 0;
     
 	DDPCON = 0;
     CFGCON = 0;
@@ -173,10 +174,16 @@ void main (void)
     TRISBbits.TRISB2 = 0;   // Set RB2 as output
     LATBbits.LATB2 = 0;     // Initialize low
 
-    // Configure RA2 as digital output for PWM2
-    ANSELBbits.ANSB0 = 0;     // Turn off analog on RB5
-    TRISBbits.TRISB0 = 0;     // Set RB5 as output
+    // Configure RB4 as digital output for PWM2
+    ANSELBbits.ANSB0 = 0;     // Turn off analog on RB4
+    TRISBbits.TRISB0 = 0;     // Set RB4 as output
     LATBbits.LATB0 = 0;       // Initialize low
+
+    // Configure RB3 as digital output for PWM2
+   // ANSELBbits.ANSA0 = 0;     // Turn off analog on RB3
+    TRISAbits.TRISA0 = 0;     // Set RB3 as output
+    LATAbits.LATA0 = 0;       // Initialize low
+    //ODCBbits.ODCB3 = 0;
 	
 	SetupTimer1(); // Set timer 5 to interrupt every 10 us
 
@@ -190,25 +197,25 @@ void main (void)
     printf("Servo signal generator for the PIC32MX130F064B.  Output is in RB6 (pin 15).\r\n");
     printf("By Jesus Calvino-Fraga (c) 2018.\r\n");
     printf("Pulse width between 60 (for 0.6ms) and 240 (for 2.4ms)\r\n");
-	state=0;
+	
+
 	while (1)
 	{
     	if(state == 0)
          {
               // Move to extreme position:
-              ISR_pwm4 = 200;   // Servo 1 gets a 2.0ms pulse (assuming 10us per count)
-              ISR_pwm5 = 100;   // Servo 2 gets a 1.0ms pulse
+              ISR_pwm1 = 200;   // Servo 1 gets a 2.0ms pulse (assuming 10us per count)
+              ISR_pwm2 = 100;   // Servo 2 gets a 1.0ms pulse
               waitms(2000);     // Hold for 2 seconds
               state = 1;
          }
          else
          {
               // Return to starting position:
-              ISR_pwm4 = 100;   // Servo 1 gets a 1.0ms pulse
-              ISR_pwm5 = 200;   // Servo 2 gets a 2.0ms pulse
+              ISR_pwm1 = 100;   // Servo 1 gets a 1.0ms pulse
+              ISR_pwm2 = 200;   // Servo 2 gets a 2.0ms pulse
               waitms(2000);     // Hold for 2 seconds
               state = 0;
 	}
 }
 }
-

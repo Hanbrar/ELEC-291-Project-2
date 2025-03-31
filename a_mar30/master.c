@@ -255,8 +255,6 @@ int main(void)
 
 		duty_x = voltageToDuty(adc_v8);
 		duty_y = voltageToDuty(adc_v9);
-        
-        //printf("%d,%d",duty_x, duty_y);
 
         // if(adc_v8 > 1.6 && j8 <2900)
         //     right = 1;
@@ -311,7 +309,7 @@ int main(void)
 		}
 		else // Timed out waiting for reply
 		{
-			printf(" No response \r\n", buff);
+			printf("NO RESPONSE \r\n", buff);
 			while(ReceivedBytes2()>0) egetc2(); // Clear FIFO
 		}
 		
