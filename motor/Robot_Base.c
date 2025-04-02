@@ -312,10 +312,10 @@ void main(void)
 		}	
 
 		// Change the servo PWM signals
-        ISR_pwm1 = 1; //pin 9 - motor1 forawrd
+        ISR_pwm1 = 100; //pin 9 - motor1 forawrd
         ISR_pwm2 = 1; //pin 10  -motor1 backward
 		ISR_pwm3 = 100; //pin 11 -motor2 forward
-        ISR_pwm4 = 100; //pin 12 -motor2 backward
+        ISR_pwm4 = 1; //pin 12 -motor2 backward
 		
 		//if (ISR_pwm1<8000)
 		//{

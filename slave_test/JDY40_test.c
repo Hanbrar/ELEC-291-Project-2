@@ -272,6 +272,7 @@ void ReceptionOff (void)
 void main(void)
 {
 	char buff[80];
+    char buff2[80];
     int cnt=0;
     char c;
     
@@ -302,27 +303,30 @@ void main(void)
 
 	// We should select an unique device ID.  The device ID can be a hex
 	// number from 0x0000 to 0xFFFF.  In this case is set to 0xABBA
-	SendATCommand("AT+DVIDCAFE\r\n");  
+	SendATCommand("AT+DVIDFEEF\r\n");  
 
 	cnt=0;
 	while(1)
 	{	
-        
+        printf("%s",buff2);
 		if(U1STAbits.URXDA) // Something has arrived
 		{
 			c=U1RXREG;
 			if(c=='!') // Master is sending message
 			{
 				//SerialReceive1_timeout(buff, sizeof(buff)-1);
-				SerialReceive1(buff, sizeof(buff)-1);
-				if(strlen(buff)==7)
+				SerialReceive1_timeout(buff, sizeof(buff)-1);
+                printf("Master1 says: %s\r\n", buff);
+				if(strlen(buff)>1)
 				{
 					printf("Master says: %s\r\n", buff);
+                    sprintf(buff2,"%s", buff);
+
 				}
 				else
 				{
 					// Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
-					ClearFIFO();
+                    ClearFIFO();
 					printf("*** BAD MESSAGE ***: %s\r\n", buff);
 				}				
 			}

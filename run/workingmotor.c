@@ -36,7 +36,7 @@
 // Defines
 #define SYSCLK 40000000L
 //#define DEF_FREQ 16000L
-//#define FREQ 100000L // We need the ISR for timer 1 every 10 us
+#define FREQ 100000L // We need the ISR for timer 1 every 10 us
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 #define Baud1BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
@@ -500,7 +500,8 @@ void main(void)
 	unsigned long int count, f;
 	unsigned char LED_toggle=0;
 	float up,down,left,right;
-    int button_auto,button_manual,button_coin;    
+    int button_auto,button_manual,button_coin;
+    int state;    
     ConfigurePins();
     SetupTimer1();
     ADCConf(); // Configure ADC
@@ -546,7 +547,7 @@ void main(void)
     LATAbits.LATA0 = 0;       // Initialize low
     
 
-  
+    CFGCON = 0;
   
     UART2Configure(115200);  // Configure UART2 for a baud rate of 115200
     UART1Configure(9600);  // Configure UART1 to communicate with JDY40 with a baud rate of 9600
@@ -587,6 +588,7 @@ void main(void)
     speedx=1;
     speedy=1;
     latch=0;
+    state=0;
 	while(1)
 	{	
         
@@ -698,57 +700,51 @@ if(button_coin == 1 &&latch ==0){
     //state0
     printf("button1:%d\r\n", button_coin);
         
-                printf("state1\r\n");
-                waitms(2000);
-                ISR_pwm5 = 24;
-                ISR_pwm6 = 20;
-                waitms(500);
-    //state1
-               printf("state2\r\n");
-                ISR_pwm5 = 20;
-                waitms(500);     // Hold for 0.5 seconds
-    
-    //state2
-              printf("state3\r\n");
-                for(count1 = 200; count1 >= 100;count1--){
-                    ISR_pwm6 = count1/10;
-                    waitms(3);
-                }
-              
-                LATAbits.LATA0 = 1;
-                waitms(2000);
-    //state3
-    
-                for(count1 = 200; count1 <= 240;count1++){
-                    ISR_pwm5 = count1/10;
-                    waitms(3);
-                }
-                printf("afterloop1\r\n");
-                waitms(500);
-    //state4
-    
-                for(count1 = 100; count1 <= 180;count1++){
-                    ISR_pwm6 = count1/10;
-                    waitms(3);
-                }
-                waitms(500);
-                printf("afterloop2\r\n");
-    //state5
-            
-                for(count1 = 240; count1 >= 60;count1--){
-                    ISR_pwm5 = count1/10;
-                    waitms(3);
-                }
-                LATAbits.LATA0 = 0;
-                waitms(3000);
-                printf("afterloop3\r\n");
-    //state6
-                ISR_pwm5 = 24;
-                ISR_pwm6 = 18;
-    
-                waitms(500);
-                printf("afterloop4\r\n");
-                latch=1;
+    if (state == 0) { //default position
+        printf("State0\r\n");
+        waitms(1000);
+        ISR_pwm5 = 100;
+        ISR_pwm6 = 70;
+        waitms(500);
+        state = 1;
+
+    } else if(state == 1) { //rotate top servo down to ground
+        printf("State1\r\n");
+        ISR_pwm6 = 190;
+        waitms(500);     // Hold for 0.5 seconds
+        state = 2;
+
+    } else if(state == 2) { //turn on magnet rotate bottom servo to sweep area.
+        printf("State2\r\n");
+        LATAbits.LATA0 = 1;
+
+        for(ISR_pwm5 = 100; ISR_pwm5 <= 150; ISR_pwm5++){
+            waitms(10);
+        }
+
+        waitms(500);
+        state = 3;
+
+    } else if (state == 3) { //rotate top servo to lift coin off ground
+        printf("State3\r\n");
+        for(ISR_pwm6 = 180; ISR_pwm6 >= 70; ISR_pwm6--){
+            waitms(10); //more stagger to carefully lift up coin
+        }
+        waitms(250);
+        state = 4;
+
+    } else if (state == 4) { //rotate top servo to move coin above collection box
+        printf("State4\r\n");
+        for(ISR_pwm5 = 150; ISR_pwm5 >= 65; ISR_pwm5--){
+            waitms(10); //more stagger to carefully lift up coin
+        }
+
+        waitms(250); //pause before drop
+        LATAbits.LATA0 = 0; //turn off magnet
+        state = 0; //go back to start
+        printf("DONE\r\n");
+
+    } 
             
             }
 

@@ -281,7 +281,7 @@ int UART1Configure(int desired_baud)
 
     // Peripheral Pin Select for UART1.  These are the pins that can be used for U1RX from TABLE 11-1 of '60001168J.pdf':
     // 0000 = RPA2
-	// 0001 = RPB6
+	// 0001 = RPB6 
 	// 0010 = RPA4
 	// 0011 = RPB13
 	// 0100 = RPB2
@@ -546,7 +546,7 @@ void main(void)
     LATAbits.LATA0 = 0;       // Initialize low
     
 
-  
+    CFGCON = 0;
   
     UART2Configure(115200);  // Configure UART2 for a baud rate of 115200
     UART1Configure(9600);  // Configure UART1 to communicate with JDY40 with a baud rate of 9600
@@ -699,55 +699,42 @@ if(button_coin == 1 &&latch ==0){
     printf("button1:%d\r\n", button_coin);
         
                 printf("state1\r\n");
-                waitms(2000);
-                ISR_pwm5 = 24;
-                ISR_pwm6 = 20;
+                waitms(1000);
+                ISR_pwm5 = 10;
+                ISR_pwm6 = 7;
                 waitms(500);
     //state1
                printf("state2\r\n");
-                ISR_pwm5 = 20;
+                ISR_pwm6 = 19;
                 waitms(500);     // Hold for 0.5 seconds
     
     //state2
               printf("state3\r\n");
-                for(count1 = 200; count1 >= 100;count1--){
-                    ISR_pwm6 = count1/10;
+                LATAbits.LATA0 = 1;
+                for(count1 = 100; count1 <= 150;count1++){
+                    ISR_pwm5 = count1/10;
                     waitms(3);
                 }
               
-                LATAbits.LATA0 = 1;
-                waitms(2000);
+                waitms(500);
     //state3
     
-                for(count1 = 200; count1 <= 240;count1++){
-                    ISR_pwm5 = count1/10;
-                    waitms(3);
-                }
-                printf("afterloop1\r\n");
-                waitms(500);
-    //state4
-    
-                for(count1 = 100; count1 <= 180;count1++){
+                for(count1 = 180; count1 >= 70;count1--){
                     ISR_pwm6 = count1/10;
                     waitms(3);
                 }
-                waitms(500);
-                printf("afterloop2\r\n");
-    //state5
-            
-                for(count1 = 240; count1 >= 60;count1--){
+                printf("afterloop1\r\n");
+                waitms(250);
+    //state4
+    
+                for(count1 = 150; +count1 >= 65;count1--){
                     ISR_pwm5 = count1/10;
                     waitms(3);
                 }
+                waitms(250);
+                printf("afterloop2\r\n");
                 LATAbits.LATA0 = 0;
-                waitms(3000);
-                printf("afterloop3\r\n");
-    //state6
-                ISR_pwm5 = 24;
-                ISR_pwm6 = 18;
-    
-                waitms(500);
-                printf("afterloop4\r\n");
+                waitms(250);
                 latch=1;
             
             }

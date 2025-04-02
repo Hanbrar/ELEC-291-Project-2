@@ -14,8 +14,8 @@
 #define FREQ 100000L // We need the ISR for timer 1 every 10 us
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
-volatile int ISR_pwm4=150, ISR_pwm5=150;
-volatile int ISR_pw=100, ISR_cnt2=0, ISR_frc;
+volatile int ISR_pwm1=100, ISR_pwm2 = 70;
+volatile int ISR_pw=100, ISR_cnt=0, ISR_frc;
 
 // The Interrupt Service Routine for timer 1 is used to generate one or more standard
 // hobby servo signals.  The servo signal has a fixed period of 20ms and a pulse width
@@ -201,21 +201,83 @@ void main (void)
 
 	while (1)
 	{
-    	if(state == 0)
-         {
-              // Move to extreme position:
-              ISR_pwm1 = 200;   // Servo 1 gets a 2.0ms pulse (assuming 10us per count)
-              ISR_pwm2 = 100;   // Servo 2 gets a 1.0ms pulse
-              waitms(2000);     // Hold for 2 seconds
-              state = 1;
-         }
-         else
-         {
-              // Return to starting position:
-              ISR_pwm1 = 100;   // Servo 1 gets a 1.0ms pulse
-              ISR_pwm2 = 200;   // Servo 2 gets a 2.0ms pulse
-              waitms(2000);     // Hold for 2 seconds
-              state = 0;
-	}
-}
+
+        //pmw2 is top servo
+        //pwm1 is bottom servo
+        /* state machine 
+          top         bot
+        0 0     -> 60
+        1 0     -> 60
+        2 90    -> 150
+        3 90    -> 150
+        4 0     -> 60
+        5 0     -> 60
+        6 ~30   -> 90
+        */ 
+
+
+        //bottom servo code******
+        // waitms(2000);
+        // ISR_pwm1 = 100;
+        // waitms(1000);
+        // ISR_pwm1 = 150;
+        // waitms(1000);
+        // ISR_pwm1 = 65;
+        // waitms(1000);
+        // ISR_pwm1 = 100;
+
+        // //top servo code*****
+        // waitms(2000);
+        // ISR_pwm2 = 70;
+        // waitms(2000);
+        // ISR_pwm2 = 180;
+
+
+
+    	if (state == 0) { //default position
+
+            waitms(1000);
+            ISR_pwm1 = 100;
+            ISR_pwm2 = 70;
+            waitms(500);
+            state = 1;
+
+        } else if(state == 1) { //rotate top servo down to ground
+            
+            ISR_pwm2 = 190;
+            waitms(500);     // Hold for 0.5 seconds
+            state = 2;
+
+        } else if(state == 2) { //turn on magnet rotate bottom servo to sweep area.
+
+            LATAbits.LATA0 = 1;
+
+            for(ISR_pwm1 = 100; ISR_pwm1 <= 150; ISR_pwm1++){
+				waitms(10);
+			}
+
+            waitms(500);
+			state = 3;
+
+        } else if (state == 3) { //rotate top servo to lift coin off ground
+
+            for(ISR_pwm2 = 180; ISR_pwm2 >= 70; ISR_pwm2--){
+				waitms(10); //more stagger to carefully lift up coin
+			}
+            waitms(250);
+			state = 4;
+
+        } else if (state == 4) { //rotate top servo to move coin above collection box
+
+            for(ISR_pwm1 = 150; ISR_pwm1 >= 65; ISR_pwm1--){
+				waitms(10); //more stagger to carefully lift up coin
+			}
+
+			waitms(250); //pause before drop
+            LATAbits.LATA0 = 0; //turn off magnet
+			state = 0; //go back to start
+
+        } 
+        
+    }
 }

@@ -94,6 +94,8 @@ void waitms(int len)
 }
 
 #define PIN_PERIOD (PORTB&(1<<6))
+//#define PIN_PERIOD (PORTB&(1<<1))
+
 
 // GetPeriod() works for frequencies between 200Hz and 700kHz
 
@@ -204,10 +206,21 @@ void main(void)
     
     UART2Configure(115200);  // Configure UART2 for a baud rate of 115200
     
+    
     ANSELB &= ~(1<<6); // Set RB6 as a digital I/O
     TRISB |= (1<<6);   // configure pin RB6 as input
-    CNPUB |= (1<<6);   // Enable pull-up resistor for RB6
- 
+    CNPUB |= (1<<6);   // Enable pull-up resistor for 
+    
+    /*
+    ANSELB &= ~(1 << 0); // Set RB0 as a digital I/O
+    TRISB |= (1 << 0);   // Configure pin RB0 as input
+    CNPUB |= (1 << 0);   // Enable pull-up resistor for RB0
+    */
+    
+    /*ANSELB &= ~(1 << 1); // Set RB1 as a digital I/O
+    TRISB |= (1 << 1);   // Configure pin RB1 as input
+    CNPUB |= (1 << 1);   // Enable pull-up resistor for RB1
+    */
 	waitms(500);
 	printf("PIC32MX130 Period measurement using the core timer free running counter.\r\n"
 	       "Connect signal to RB6 (pin 15).\r\n");
@@ -220,13 +233,11 @@ void main(void)
         count=GetPeriod(100);
 		if(count>0)
 		{
-			T=(count*2.0)/(SYSCLK*100.0);
-            f=1/T;
+            f=((SYSCLK/2L)*100L)/count;
             ct=(c1*c1)/(c1+c2);
             Inductor=1/(39.4784*f*f*ct); // L=1/(4*pi^2*f^2*C) 4pi^2~39.4784
             //This is where in the code where we will measure inductor that will
             //directly tell us if metal content is present 
-
             printf("Inductor=%f\r\n", Inductor);
 		}
 		else

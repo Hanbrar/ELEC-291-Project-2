@@ -41,7 +41,7 @@
 #define Baud1BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
 //servo
-volatile int ISR_pwm5=150, ISR_pwm6=150;
+volatile int ISR_pwm5=10, ISR_pwm6=7;
 volatile int ISR_pw=100, ISR_cnt2=0, ISR_frc;
 //motor
 volatile int ISR_pwm1=150, ISR_pwm2=150, ISR_pwm3=150, ISR_pwm4=150, ISR_cnt=0;
@@ -83,11 +83,11 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 
     if(ISR_cnt2<ISR_pwm5)
 	{
-		LATBbits.LATB2 = 1;
+		LATBbits.LATB5 = 1;
 	}
 	else
 	{
-		LATBbits.LATB2 = 0;
+		LATBbits.LATB5 = 0;
 	}
 
 	if(ISR_cnt2<ISR_pwm6)
@@ -103,7 +103,7 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 	{
 		ISR_cnt2=0; // 2000 * 10us=20ms
 		ISR_frc++;
-        LATBbits.LATB0 = 1; // Turn on RA2 (PWM output, pin 9)
+        LATBbits.LATB5 = 1; // Turn on RA2 (PWM output, pin 9)
         LATBbits.LATB2 = 1; // Turn on RA4 (PWM output, pin 12)
 	}
 }
@@ -128,7 +128,7 @@ void SetupTimer1(void)
 
 
 /*##################################*/
-#define PIN_PERIOD (PORTB&(1<<5))
+#define PIN_PERIOD (PORTB&(1<<6))
 // GetPeriod() seems to work fine for frequencies between 200Hz and 700kHz.
 long int GetPeriod (int n)
 {
@@ -281,7 +281,7 @@ int UART1Configure(int desired_baud)
 
     // Peripheral Pin Select for UART1.  These are the pins that can be used for U1RX from TABLE 11-1 of '60001168J.pdf':
     // 0000 = RPA2
-	// 0001 = RPB6
+	// 0001 = RPB6 
 	// 0010 = RPA4
 	// 0011 = RPB13
 	// 0100 = RPB2
@@ -321,6 +321,11 @@ void ConfigurePins(void)
     // Configure pins as analog inputs
     ANSELBbits.ANSB2 = 1;   // set RB2 (AN4, pin 6 of DIP28) as analog pin
     TRISBbits.TRISB2 = 1;   // set RB2 as an input
+
+    ANSELBbits.ANSB15 = 1;   // set RB13 (AN9, pin 26 of DIP28) as analog pin
+    TRISBbits.TRISB15 = 1;   // set RB13 as an input
+
+  
     ANSELBbits.ANSB3 = 1;   // set RB3 (AN5, pin 7 of DIP28) as analog pin
     TRISBbits.TRISB3 = 1;   // set RB3 as an input
     
@@ -343,6 +348,7 @@ void ConfigurePins(void)
 	TRISAbits.TRISA3 = 0; // pin 10 of DIP28
 	TRISBbits.TRISB4 = 0; // pin 11 of DIP28
 	TRISAbits.TRISA4 = 0; // pin 12 of DIP28
+
 	
 	INTCONbits.MVEC = 1;
 }
@@ -498,6 +504,11 @@ void main(void)
     int adcval;
     long int v;
 	unsigned long int count, f;
+    float ct,c1,c2;
+    c1=0.00000001; //10nf
+    c2 = 0.0000001; //100nf
+    float Inductor;
+    
 	unsigned char LED_toggle=0;
 	float up,down,left,right;
     int button_auto,button_manual,button_coin;    
@@ -518,6 +529,8 @@ void main(void)
     int pw;
     int count1;
 
+    int adcval1, adcval2;
+    float perimeter1, perimeter2;
     
     volatile int servo_state = 0;
     volatile unsigned int servo_timer = 0;
@@ -530,11 +543,13 @@ void main(void)
 	CFGCON = 0;
 
     /*SERVO PINS CONFIGURATION*/
+// pin 14
     // Configure RB2 as digital output for PWM5
-    ANSELBbits.ANSB2 = 0;   // Disable analog on RB2
-    TRISBbits.TRISB2 = 0;   // Set RB2 as output
-    LATBbits.LATB2 = 0;     // Initialize low
+   // ANSELBbits.ANSB5 = 0;   // Disable analog on RB2
+    TRISBbits.TRISB5 = 0;   // Set RB2 as output
+    LATBbits.LATB5 = 0;     // Initialize low
 
+// pin 4
     // Configure RB0 as digital output for PWM6
     ANSELBbits.ANSB0 = 0;     // Turn off analog on RB0
     TRISBbits.TRISB0 = 0;     // Set RB0 as output
@@ -542,11 +557,11 @@ void main(void)
 
     // Configure RA0 as digital output for megenet
    // ANSELBbits.ANSA0 = 0;     // Turn off analog on RA0
-    TRISAbits.TRISA0 = 0;     // Set RA0 as output
-    LATAbits.LATA0 = 0;       // Initialize low
+    TRISAbits.TRISA2 = 0;     // Set RA0 as output
+    LATAbits.LATA2 = 0;       // Initialize low
     
 
-  
+    CFGCON = 0;
   
     UART2Configure(115200);  // Configure UART2 for a baud rate of 115200
     UART1Configure(9600);  // Configure UART1 to communicate with JDY40 with a baud rate of 9600
@@ -556,6 +571,13 @@ void main(void)
     TRISB &= ~(1<<14);  // configure pin RB14 as output
 	LATB |= (1<<14);    // 'SET' pin of JDY40 to 1 is normal operation mode
 
+    
+    ANSELB &= ~(1<<6); // Set RB6 as a digital I/O
+    TRISB |= (1<<6);   // configure pin RB6 as input
+    CNPUB |= (1<<6);   // Enable pull-up resistor for 
+    
+    
+    
     int latch;
 	delayms(500); // Give putty time to start before we send stuff.
     printf("\r\nJDY40 test program. PIC32 behaving as Slave.\r\n");
@@ -589,9 +611,17 @@ void main(void)
     latch=0;
 	while(1)
 	{	
-        
-            
-        printf("Speedx: %d, Speedy: %d\r\n", speedx, speedy);
+  
+
+        adcval1 = ADCRead(4); //pin 6
+    	perimeter1=adcval1*3.3/1023.0;
+        adcval2= ADCRead(5); //pin 7 
+        perimeter2=adcval2*3.3/1023.0;
+
+        printf("Speedx: %d, Speedy: %d,Inductor: %f Perimeter1: %f,Perimeter2: %f", speedx, speedy,Inductor,perimeter1,perimeter2);
+         //printf("Perimeter1: %f, Perimeter2: %f\r\n", perimeter1, perimeter2); 
+        //printf("Inductor=%f\r\n", Inductor);
+
         if(speedy>1){
             ISR_pwm1 = speedy; //pin 9 - motor1 forawrd
             ISR_pwm2 = 1; //pin 10  -motor1 backward
@@ -624,9 +654,19 @@ void main(void)
             ISR_pwm3 = 1; //pin 11 -motor2 forward
             ISR_pwm4 = 1; //pin 12 -motor2 backward
         }
-        printf("button:%d\r\n", button_coin);
-        
-
+        //printf("button:%d\r\n", button_coin);
+      
+    
+        count=GetPeriod(100);
+		if(count>0)
+		{
+            f=((SYSCLK/2L)*100L)/count; 
+            ct=(c1*c1)/(c1+c2);
+            Inductor=1/(39.4784*f*f*ct); // L=1/(4*pi^2*f^2*C) 4pi^2~39.4784
+            //This is where in the code where we will measure inductor that will
+            //directly tell us if metal content is present 
+            
+		}
 
 
         if(button_coin !=1){
@@ -640,27 +680,27 @@ void main(void)
 			{
 				//SerialReceive1_timeout(buff, sizeof(buff)-1);
                 
-                printf("I am breaking here1 \r\n");
+                //printf("I am breaking here1 \r\n");
 				SerialReceive1_timeout(buff, sizeof(buff)-1); //why
  //this line is casuing isuses when it loops twice fine the first time then it breaks 
-                printf("I am breaking here2 \r\n");
+                //printf("I am breaking here2 \r\n");
                 i = 0;
                 token = strtok(buff, " ");
-                printf("I am breaking here3 \r\n");
+                //printf("I am breaking here3 \r\n");
                 while(token != NULL && i < 5)
                 {
                     values[i] = atoi(token);
                     token = strtok(NULL, " ");
                     i++;
                 }
-                printf("I am breaking here4 \r\n");
+                //printf("I am breaking here4 \r\n");
 
                 speedx = values[0];
                 speedy = values[1];
                 button_auto = values[2];
                 button_manual = values[3];
                 button_coin = values[4];
-                printf("I am breaking here5 \r\n");
+                //printf("I am breaking here5 \r\n");
   
 				if(strlen(buff)==7)
 				{
@@ -689,7 +729,7 @@ void main(void)
 			
 		}
     }
-        printf("I am breaking here6 \r\n");
+        //printf("I am breaking here6 \r\n");
         
 //servo
 
@@ -699,55 +739,47 @@ if(button_coin == 1 &&latch ==0){
     printf("button1:%d\r\n", button_coin);
         
                 printf("state1\r\n");
-                waitms(2000);
-                ISR_pwm5 = 24;
-                ISR_pwm6 = 20;
+                waitms(1000);
+                ISR_pwm5 = 10;
+                ISR_pwm6 = 7;
                 waitms(500);
     //state1
                printf("state2\r\n");
-                ISR_pwm5 = 20;
+                ISR_pwm6 = 20;
                 waitms(500);     // Hold for 0.5 seconds
     
     //state2
               printf("state3\r\n");
-                for(count1 = 200; count1 >= 100;count1--){
-                    ISR_pwm6 = count1/10;
-                    waitms(3);
+                LATAbits.LATA0 = 1;
+                for(count1 = 100; count1 <= 150;count1++){
+                    ISR_pwm5 = count1/10;
+                    waitms(6);
                 }
               
-                LATAbits.LATA0 = 1;
-                waitms(2000);
+                waitms(500);
     //state3
     
-                for(count1 = 200; count1 <= 240;count1++){
-                    ISR_pwm5 = count1/10;
-                    waitms(3);
+                for(count1 = 180; count1 >= 70;count1--){
+                    ISR_pwm6 = count1/10;
+                    waitms(6);
                 }
                 printf("afterloop1\r\n");
-                waitms(500);
+                waitms(250);
     //state4
     
-                for(count1 = 100; count1 <= 180;count1++){
-                    ISR_pwm6 = count1/10;
-                    waitms(3);
-                }
-                waitms(500);
-                printf("afterloop2\r\n");
-    //state5
-            
-                for(count1 = 240; count1 >= 60;count1--){
+                for(count1 = 150; +count1 >= 65;count1--){
                     ISR_pwm5 = count1/10;
-                    waitms(3);
+                    waitms(6);
                 }
+                waitms(250);
+                printf("afterloop2\r\n");
                 LATAbits.LATA0 = 0;
-                waitms(3000);
-                printf("afterloop3\r\n");
-    //state6
-                ISR_pwm5 = 24;
-                ISR_pwm6 = 18;
-    
+                waitms(1250);
+    //back to beginning
+                printf("orignal state\r\n");
+                ISR_pwm5 = 10;
+                ISR_pwm6 = 7;
                 waitms(500);
-                printf("afterloop4\r\n");
                 latch=1;
             
             }
@@ -758,6 +790,7 @@ if(button_coin == 1 &&latch ==0){
 
             printf("button3:%d\r\n", button_coin);
             button_coin=0;
+
 
         
         

@@ -18,7 +18,7 @@ clean:
 	
 LoadFlash:
 	@taskkill /f /im putty.exe /t /fi "status eq running" > NUL
-	pro32 -p Period.hex
+	pro32 -p JDY40_test.hex
 	cmd /c c:\putty\putty.exe -serial $(PORTN) -sercfg 115200,8,n,1,N
 
 putty:
