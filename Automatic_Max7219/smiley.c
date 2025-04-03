@@ -1054,6 +1054,93 @@
 
 
 // TEST CODE V2
+// #include <XC.h>
+// #include <sys/attribs.h>
+
+// #pragma config FNOSC = FRCPLL       // Internal Fast RC oscillator (8 MHz) w/ PLL
+// #pragma config FPLLIDIV = DIV_2     // Divide FRC before PLL (now 4 MHz)
+// #pragma config FPLLMUL = MUL_20     // PLL Multiply (now 80 MHz)
+// #pragma config FPLLODIV = DIV_2     // Divide After PLL (now 40 MHz)
+// #pragma config FWDTEN = OFF         // Watchdog Disabled
+
+// // MAX7219 Pin Definitions (PIC32MX130 DIP28)
+// #define CS      LATBbits.LATB0   // RB0 (Pin 4)
+// #define DIN     LATBbits.LATB11  // RB11 (Pin 22) - SPI SDO1
+// #define CLK     LATBbits.LATB14  // RB14 (Pin 25) - SPI SCK1
+
+// // Smiley Face Pattern (8x8)
+// const uint16_t SMILEY[] = {
+//   0x013C,  // Row 1: 00111100
+//   0x0242,  // Row 2: 01000010
+//   0x03A5,  // Row 3: 10100101
+//   0x0481,  // Row 4: 10000001
+//   0x0581,  // Row 5: 10000001
+//   0x06A5,  // Row 6: 10100101
+//   0x0742,  // Row 7: 01000010
+//   0x083C   // Row 8: 00111100
+// };
+
+// // Initialize SPI with PPS Configuration
+// void SPI_Init() {
+//   // Disable analog functions (if any)
+//   ANSELBbits.ANSB0 = 0;  // RB0 (CS) as digital
+//   ANSELBbits.ANSB11 = 0; // RB11 (DIN) as digital
+//   ANSELBbits.ANSB14 = 0; // RB14 (CLK) as digital
+
+//   // Configure pins as outputs
+//   TRISBbits.TRISB0 = 0;   // CS (RB0) as output
+//   TRISBbits.TRISB11 = 0;  // DIN (RB11) as output
+//   TRISBbits.TRISB14 = 0;  // CLK (RB14) as output
+
+//   // Peripheral Pin Select (PPS) for SPI1
+//   RPB11Rbits.RPB11R = 0b0011; // Map SDO1 (DIN) to RB11
+//   // SCK1 (CLK) is already mapped to RB14 by default
+
+//   // SPI Configuration
+//   SPI1CON = 0;          // Reset SPI1
+//   SPI1BRG = 0;          // Max clock speed (SYSCLK/2 = 20 MHz)
+//   SPI1CONbits.MSTEN = 1; // Master mode
+//   SPI1CONbits.MODE16 = 1; // 16-bit mode
+//   SPI1CONbits.CKP = 0;   // Clock polarity (SPI Mode 0)
+//   SPI1CONbits.ON = 1;    // Enable SPI
+
+//   CS = 1; // Deactivate MAX7219 initially
+// }
+
+// // Send 16-bit command to MAX7219
+// void MAX7219_Write(uint16_t data) {
+//   CS = 0;               // Activate MAX7219
+//   SPI1BUF = data;       // Send data
+//   while(SPI1STATbits.SPIBUSY); // Wait for SPI transfer
+//   CS = 1;               // Deactivate
+// }
+
+// // Initialize MAX7219
+// void MAX7219_Init() {
+//   MAX7219_Write(0x0C01); // Turn on display
+//   MAX7219_Write(0x0A07); // Medium brightness
+//   MAX7219_Write(0x0900); // No decoding
+//   MAX7219_Write(0x0B07); // Scan all 8 rows
+// }
+
+// int main(void) {
+//   // Configure SPI and MAX7219
+//   SPI_Init();
+//   MAX7219_Init();
+
+//   // Display smiley face
+//   for(int i=0; i<8; i++) {
+//     MAX7219_Write(SMILEY[i]);
+//   }
+
+//   while(1); // Keep display active
+
+//   return 0;
+// }
+
+
+// Test Code V3
+
 #include <XC.h>
 #include <sys/attribs.h>
 
@@ -1084,7 +1171,7 @@ const uint16_t SMILEY[] = {
 void SPI_Init() {
   // Disable analog functions (if any)
   ANSELBbits.ANSB0 = 0;  // RB0 (CS) as digital
-  ANSELBbits.ANSB11 = 0; // RB11 (DIN) as digital
+  // ANSELBbits.ANSB11 = 0; // Removed: RB11 (DIN) is not analog-capable on this device
   ANSELBbits.ANSB14 = 0; // RB14 (CLK) as digital
 
   // Configure pins as outputs
@@ -1124,12 +1211,14 @@ void MAX7219_Init() {
 }
 
 int main(void) {
+  int i; // Declare loop variable outside the for loop
+
   // Configure SPI and MAX7219
   SPI_Init();
   MAX7219_Init();
 
   // Display smiley face
-  for(int i=0; i<8; i++) {
+  for(i = 0; i < 8; i++) {
     MAX7219_Write(SMILEY[i]);
   }
 

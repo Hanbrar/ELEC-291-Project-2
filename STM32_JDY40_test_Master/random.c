@@ -9,32 +9,6 @@
 #define SYSCLK 32000000L
 #define DEF_F 15000L
 #define F_CPU 32000000L
-#define COIN_FREQ_THRESHOLD 20000
-
-// --- LCD Macros (from lcd.h) ---
-#define LCD_RS_0 (GPIOA->ODR &= ~BIT0)
-#define LCD_RS_1 (GPIOA->ODR |= BIT0)
-#define LCD_E_0  (GPIOA->ODR &= ~BIT1)
-#define LCD_E_1  (GPIOA->ODR |= BIT1)
-#define LCD_D4_0 (GPIOA->ODR &= ~BIT2)
-#define LCD_D4_1 (GPIOA->ODR |= BIT2)
-#define LCD_D5_0 (GPIOA->ODR &= ~BIT3)
-#define LCD_D5_1 (GPIOA->ODR |= BIT3)
-#define LCD_D6_0 (GPIOA->ODR &= ~BIT4)
-#define LCD_D6_1 (GPIOA->ODR |= BIT4)
-#define LCD_D7_0 (GPIOA->ODR &= ~BIT5)
-#define LCD_D7_1 (GPIOA->ODR |= BIT5)
-#define CHARS_PER_LINE 16
-
-
-
-// --- Forward declarations for LCD functions ---
-void LCD_pulse(void);
-void LCD_byte(unsigned char x);
-void WriteData(unsigned char x);
-void WriteCommand(unsigned char x);
-void LCD_4BIT(void);
-void LCDprint(char * string, unsigned char line, unsigned char clear);
 
 // LQFP32 pinout
 //             ----------
@@ -89,73 +63,6 @@ void wait_1ms(void)
 void delayms(int len)
 {
     while(len--) wait_1ms();
-}
-
-
-// --- LCD Functions (from lcd.c) ---
-void LCD_pulse(void)
-{
-    LCD_E_1;
-    Delay_us(40);
-    LCD_E_0;
-}
-
-void LCD_byte(unsigned char x)
-{
-    // Send high nibble
-    if(x & 0x80) LCD_D7_1; else LCD_D7_0;
-    if(x & 0x40) LCD_D6_1; else LCD_D6_0;
-    if(x & 0x20) LCD_D5_1; else LCD_D5_0;
-    if(x & 0x10) LCD_D4_1; else LCD_D4_0;
-    LCD_pulse();
-    Delay_us(40);
-    // Send low nibble
-    if(x & 0x08) LCD_D7_1; else LCD_D7_0;
-    if(x & 0x04) LCD_D6_1; else LCD_D6_0;
-    if(x & 0x02) LCD_D5_1; else LCD_D5_0;
-    if(x & 0x01) LCD_D4_1; else LCD_D4_0;
-    LCD_pulse();
-}
-
-void WriteData(unsigned char x)
-{
-    LCD_RS_1;
-    LCD_byte(x);
-    waitms(2);
-}
-
-void WriteCommand(unsigned char x)
-{
-    LCD_RS_0;
-    LCD_byte(x);
-    waitms(5);
-}
-
-void LCD_4BIT(void)
-{
-    LCD_E_0;  // Resting state of LCD enable is 0
-    waitms(20);
-    // Force LCD to 8-bit mode first then switch to 4-bit mode
-    WriteCommand(0x33);
-    WriteCommand(0x33);
-    WriteCommand(0x32);  // Set 4-bit mode
-    // LCD configuration: 2 lines, 5x8 font, display on, clear display
-    WriteCommand(0x28);
-    WriteCommand(0x0c);
-    WriteCommand(0x01);
-    waitms(20);
-}
-
-void LCDprint(char * string, unsigned char line, unsigned char clear)
-{
-    int j;
-    WriteCommand(line == 2 ? 0xc0 : 0x80);
-    waitms(5);
-    for(j = 0; string[j] != 0; j++)
-        WriteData(string[j]);
-    if(clear)
-        for(; j < CHARS_PER_LINE; j++)
-            WriteData(' ');
 }
 
 //**************************************************************
@@ -299,16 +206,6 @@ int voltageToDuty(float adc_v)
     return (duty);
 }
 
-
-// Sets up PA0-PA5 for LCD control and data signals.
-void LCD_GPIO_Init(void)
-{
-    RCC->IOPENR |= BIT0;
-    GPIOA->MODER &= ~0xFFF;  // Clear mode bits for PA0-PA5 (12 bits total)
-    GPIOA->MODER |= 0x555;   // Set PA0-PA5 as outputs (binary 0101 0101 0101)
-    GPIOA->OTYPER &= ~0x3F;  // Set PA0-PA5 to push-pull
-}
-
 //**************************************************************
 // Main Function
 //**************************************************************
@@ -317,7 +214,7 @@ int main(void)
     char buff[80];
     int timeout_cnt = 0;
     int up, down, left, right, duty_x, duty_y;
-    int button_auto, button_manual, button_coin;
+    int button_mode, button_extra, button_coin;
     int j8, j9;
 	float adc_v8, adc_v9;
 
@@ -326,16 +223,6 @@ int main(void)
     Configure_Pins();
     Configure_Buttons(); // <<< Added call so the push buttons are correctly set up
     initADC();
-
-
-    // LCD Code
-    // --- LCD Initialization ---
-    LCD_GPIO_Init();   // Configure PA0–PA5 for the LCD (RS, E, D4–D7)
-    LCD_4BIT();        // Initialize the LCD in 4-bit mode :contentReference[oaicite:2]{index=2}
-
-    // Optionally, print an initial message on the LCD.
-    LCDprint("Jamie Kang", 1, 1);
-    LCDprint("Initializing...", 2, 1);
 
     waitms(1000); // Give time for terminal (e.g. putty) to start
     printf("\r\nJDY-40 Master test\r\n");
@@ -358,7 +245,7 @@ int main(void)
     {
         // Reset all variables at the start of each loop
         up = 0; down = 0; left = 0; right = 0; duty_x = 0; duty_y = 0;
-        button_auto = 0; button_manual = 0; button_coin = 0;
+        button_mode = 0; button_extra = 0; button_coin = 0;
 
         // Read ADC channels for joystick (channels 8 and 9)
         j8 = readADC(ADC_CHSELR_CHSEL8);
@@ -382,24 +269,23 @@ int main(void)
 
         // Read push buttons (PB3: Auto_mode, PB5: Manual_mode, PB6: coin_picking)
         if (!(GPIOB->IDR & (1 << 3))) 
-            button_auto = 1;
+            button_mode = 1;
         if (!(GPIOB->IDR & (1 << 5))) 
-            button_manual = 1;
+            button_extra = 1;
         if (!(GPIOB->IDR & (1 << 6))) 
             button_coin = 1;
 
         // Construct message to send to the slave device
         sprintf(buff, "%d %d %d %d %d\n", 
-               duty_x, duty_y, button_auto, button_manual, button_coin);
+               duty_x, duty_y, button_mode, button_extra, button_coin);
 		
 
         // Send the message using the JDY-40 protocol:
-        eputc2('@');  // Request message from   slave
         eputc2('!');  // Attention character
         waitms(5);
         eputs2(buff);
         waitms(5);
-        
+        eputc2('@');  // Request message from slave
 
         timeout_cnt = 0;
         	while(1)
@@ -415,9 +301,6 @@ int main(void)
 			if(strlen(buff)>0) // Check for valid message size (5 characters + new line '\n')
 			{
 				printf("Slave says: %s\r", buff);
-                char displayStr[17];
-                sprintf(displayStr, "Freq: %s", buff);
-                LCDprint(displayStr, 2, 1);
 
 			}
 			else
@@ -435,6 +318,6 @@ int main(void)
 		waitms(50);  // Set the information interchange pace: communicate about every 50ms
         fflush(stdout);
         // GPIOA->ODR ^= BIT8; // Toggle PA8 (if used for LED indication)
-     
+        delayms(150);
     }
 }
