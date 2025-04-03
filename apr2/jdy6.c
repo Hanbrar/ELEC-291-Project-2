@@ -46,8 +46,7 @@ enum MovementState {
     BACKWARD,
     RIGHT_45,
     LEFT_90,
-    COIN_DETECTED,
-    STOP
+    COIN_DETECTED
 };
 
 // enum CoinSubState {
@@ -571,7 +570,6 @@ void main(void)
     double coin_threshold = 0.027;
     int searchFlag = 1; 
     int coinflag =0;
-    int coincount = 0;
 
     volatile int servo_state = 0;
     volatile unsigned int servo_timer = 0;
@@ -659,7 +657,8 @@ void main(void)
     latch=0;
 	while(1)
 	{	
-        printf("perimeter1:%lf  perimeter2:%lf  inductor:%lf\r\n", perimeter1, perimeter2, Inductor);
+        
+        //printf("perimeter1:%lf  perimeter2:%lf  inductor:%lf\r\n", perimeter1, perimeter2, Inductor);
         //AUTOCODE
         adcval1 = ADCRead(4); //pin 6
         perimeter1=adcval1*3.3/1023.0;
@@ -698,8 +697,8 @@ void main(void)
                         speedx = values[0];
                         speedy = values[1];
                         button_mode = values[2];
-                        button_extra = values[4];
-                        button_coin = values[3];
+                        button_extra = values[3];
+                        button_coin = values[4];
                         //printf("I am breaking here5 \r\n");
         
                         if (strlen(buff) == 7) {
@@ -725,27 +724,6 @@ void main(void)
        
 
             switch (movement_state) {
-         
-                case STOP: 
-                    LATBbits.LATB12 = 1; //left
-                    LATBbits.LATB10 = 1; //right
-                    TRISAbits.TRISA1 = 0; //servo
-                    waitms(500);
-                    LATBbits.LATB12 = 0; //left
-                    LATBbits.LATB10 = 0; //right
-                    TRISAbits.TRISA1 = 1; //servo
-                    waitms(250);
-                    LATBbits.LATB12 = 1; //left
-                    LATBbits.LATB10 = 1; //right
-                    TRISAbits.TRISA1 = 0; //servo
-                    waitms(500);
-                    LATBbits.LATB12 = 0; //left
-                    LATBbits.LATB10 = 0; //right
-                    TRISAbits.TRISA1 = 1; //servo
-                    waitms(250);
-                    button_mode = 0; //sets mode to manual to stop auto code
-                    break;
-
                 case START:
                 //TURN OFF LEDS
                 LATBbits.LATB12 = 0; //left
@@ -862,8 +840,7 @@ void main(void)
 
                 case COIN_DETECTED:
                     //give time to let car reverse back to coin before stopping
-         
-                    coincount++;           printf("COIN DETECTED\r\n");
+                    printf("COIN DETECTED\r\n");
                     waitms(COIN_REVERSE_TIME);
                     __builtin_disable_interrupts();
                     ISR_pwm1 = 1; //motor1
@@ -921,36 +898,20 @@ void main(void)
                     waitms(500);
 
                     //set movement back to FORWARD, activate PWM to move forward
-                    
+                    __builtin_disable_interrupts();
+                    ISR_pwm1 = 100; //motor1
+                    ISR_pwm2 = 1; //motor1
+                    ISR_pwm3 = 100; //motor2
+                    ISR_pwm4 = 1; //motor2
+                    __builtin_enable_interrupts();
                     TRISAbits.TRISA1 = 1; //servo light off
-
-
-                    if (coincount == 20) {
-                        //set movement back to STOP, utrn off motors
-                        __builtin_disable_interrupts();
-                        ISR_pwm1 = 100; //motor1
-                        ISR_pwm2 = 1; //motor1
-                        ISR_pwm3 = 100; //motor2
-                        ISR_pwm4 = 1; //motor2
-                        __builtin_enable_interrupts();
-                        coincount = 0; //reset coincount;
-                        movement_state = STOP;
-                    } else {
-                        //set movement back to FORWARD, activate PWM to move forward
-                        __builtin_disable_interrupts();
-                        ISR_pwm1 = 100; //motor1
-                        ISR_pwm2 = 1; //motor1
-                        ISR_pwm3 = 100; //motor2
-                        ISR_pwm4 = 1; //motor2
-                        __builtin_enable_interrupts();
-                        movement_state = FORWARD; //set back to FORWARD to resume searching
-                    }        
+                    movement_state = FORWARD; //set back to FORWARD to resume searching
                     break;
             } 
         } //END OF AUTO CODE
 
         
-        else  { //if (button_mode != last_button_state)
+        else { //if (button_mode != last_button_state)
             //button_mode = 0; 
             //last_button_state = 1;
             TRISAbits.TRISA1 = 1; //servo off
@@ -1015,18 +976,17 @@ void main(void)
             
 		}
 
-            if (!button_coin) {
-
                 if(U1STAbits.URXDA) { // Something has arrived
                 c = U1RXREG;
                     // Master is sending message
                     if(c =='!') {
                         //SerialReceive1_timeout(buff, sizeof(buff)-1);
                         
-                        //printf("I am breaking here1 \r\n");
+                        printf("I am breaking here1 \r\n");
+
                         SerialReceive1_timeout(buff, sizeof(buff)-1); //why
                         //this line is casuing isuses when it loops twice fine the first time then it breaks 
-                        //printf("I am breaking here2 \r\n");
+                        printf("I am breaking here2 \r\n");
                         i = 0;
                         token = strtok(buff, " ");
                         //printf("I am breaking here3 \r\n");
@@ -1042,9 +1002,11 @@ void main(void)
                         speedy = values[1];
                         button_mode = values[2];
                         button_extra = values[4];
+                        
                         button_coin = values[3];
+                        printf("value4: %d ", values[4]);
                         //printf("I am breaking here5 \r\n");
-        
+                        printf("speedx: %d, speedy: %d, button_mode %d,button_coin %d",speedx, speedy, button_mode,button_coin);
                         if (strlen(buff) == 7) {
                             printf("Master says: %s\r\n", buff);
                         } else {
@@ -1062,11 +1024,11 @@ void main(void)
                         ClearFIFO();
                     }
                 }
-            }
+            
 
             //servo
-
-            if(button_coin &&latch ==0) {
+            printf("button1:%d\r\n", button_coin);
+            if(button_coin && (latch==0)) {
 
                             TRISAbits.TRISA1 = 0; //servo
                 //state0
@@ -1114,17 +1076,16 @@ void main(void)
                             ISR_pwm6 = 7;
                             waitms(500);
                             latch=1;
-                            TRISAbits.TRISA1 = 1;
+                            
                         
             } else if (button_coin==0) {
                 latch=0;
             }
 
         printf("button3:%d\r\n", button_coin);
-        button_coin=0;
 
         }
 
 
     }
-}
+}s

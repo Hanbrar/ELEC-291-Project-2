@@ -303,7 +303,7 @@ void main(void)
 
 	// We should select an unique device ID.  The device ID can be a hex
 	// number from 0x0000 to 0xFFFF.  In this case is set to 0xABBA
-    SendATCommand("AT+DVIDCACC\r\n");
+	   SendATCommand("AT+DVIDCACC\r\n");
     SendATCommand("AT+RFC030\r\n");
 
 
@@ -334,7 +334,7 @@ void main(void)
 			}
 			else if(c=='@') // Master wants slave data
 			{
-				sprintf(buff, "%05u\n", cnt);
+				sprintf(buff, "%lu\n", f);
 				cnt++;
 				delayms(5); // The radio seems to need this delay...
 				SerialTransmit1(buff);

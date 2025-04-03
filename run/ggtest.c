@@ -46,8 +46,7 @@ enum MovementState {
     BACKWARD,
     RIGHT_45,
     LEFT_90,
-    COIN_DETECTED,
-    STOP
+    COIN_DETECTED
 };
 
 // enum CoinSubState {
@@ -571,7 +570,6 @@ void main(void)
     double coin_threshold = 0.027;
     int searchFlag = 1; 
     int coinflag =0;
-    int coincount = 0;
 
     volatile int servo_state = 0;
     volatile unsigned int servo_timer = 0;
@@ -628,7 +626,7 @@ void main(void)
     
     
     
-    int latch;
+    int latch,latch2;
 	delayms(500); // Give putty time to start before we send stuff.
     printf("\r\nJDY40 test program. PIC32 behaving as Slave.\r\n");
 
@@ -657,95 +655,67 @@ void main(void)
     speedx=1;
     speedy=1;
     latch=0;
+    latch2=0;
 	while(1)
 	{	
-        printf("perimeter1:%lf  perimeter2:%lf  inductor:%lf\r\n", perimeter1, perimeter2, Inductor);
+        //printf("perimeter1:%lf  perimeter2:%lf  inductor:%lf\r\n", perimeter1, perimeter2, Inductor);
         //AUTOCODE
         adcval1 = ADCRead(4); //pin 6
         perimeter1=adcval1*3.3/1023.0;
         adcval2= ADCRead(5); //pin 7 
         perimeter2=adcval2*3.3/1023.0;
+
+
+        if(U1STAbits.URXDA) { // Something has arrived
+            c = U1RXREG;
+                // Master is sending message
+                if(c =='!') {
+                    //SerialReceive1_timeout(buff, sizeof(buff)-1);
+                    
+                    //printf("I am breaking here1 \r\n");
+                    SerialReceive1_timeout(buff, sizeof(buff)-1); //why
+                    //this line is casuing isuses when it loops twice fine the first time then it breaks 
+                    //printf("I am breaking here2 \r\n");
+                    i = 0;
+                    token = strtok(buff, " ");
+                    //printf("I am breaking here3 \r\n");
+                    while(token != NULL && i < 5)
+                    {
+                        values[i] = atoi(token);
+                        token = strtok(NULL, " ");
+                        i++;
+                    }
+                    //printf("I am breaking here4 \r\n");
+
+                    speedx = values[0];
+                    speedy = values[1];
+                    button_mode = values[2];
+                    button_extra = values[3];
+                    button_coin = values[4];
+                    //printf("I am breaking here5 \r\n");
+    
+                    if (strlen(buff) == 7) {
+                        printf("Master says: %s\r\n", buff);
+                    } else {
+                        // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave 
+                        printf("*** BAD MESSAGE ***: %s\r\n", buff);
+                        ClearFIFO();
+                    }
+                } else if (c=='@') { // Master wants slave data
+                    sprintf(buff, "%05u\n", cnt);
+                    cnt++;
+                    delayms(10); // The radio seems to need this delay...
+                    SerialTransmit1(buff);
+                } else {
+                    // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
+                    ClearFIFO();
+                }
+            }
         
         //button mode HI is auto
         if (button_mode) { //auto mode //button_mode == last_button_state
-            
-            //button_mode = 0;
-            //last_button_state = 0; 
-            
-            //INSERT UART COMMUNICATON CODE HERE
-            printf("button_mode: %d",button_mode);
-            if(U1STAbits.URXDA) { // Something has arrived
-                c = U1RXREG;
-                    // Master is sending message
-                    if(c =='!') {
-                        //SerialReceive1_timeout(buff, sizeof(buff)-1);
-                        
-                        //printf("I am breaking here1 \r\n");
-                        SerialReceive1_timeout(buff, sizeof(buff)-1); //why
-                        //this line is casuing isuses when it loops twice fine the first time then it breaks 
-                        //printf("I am breaking here2 \r\n");
-                        i = 0;
-                        token = strtok(buff, " ");
-                        //printf("I am breaking here3 \r\n");
-                        while(token != NULL && i < 5)
-                        {
-                            values[i] = atoi(token);
-                            token = strtok(NULL, " ");
-                            i++;
-                        }
-                        //printf("I am breaking here4 \r\n");
-    
-                        speedx = values[0];
-                        speedy = values[1];
-                        button_mode = values[2];
-                        button_extra = values[4];
-                        button_coin = values[3];
-                        //printf("I am breaking here5 \r\n");
-        
-                        if (strlen(buff) == 7) {
-                            printf("Master says: %s\r\n", buff);
-                        } else {
-                            // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave 
-                            ClearFIFO();
-                            printf("*** BAD MESSAGE ***: %s\r\n", buff);
-                          
-                        }
-                    } else if (c=='@') { // Master wants slave data
-                        sprintf(buff, "%f,%d\n", f);
-                        delayms(5); // The radio seems to need this delay...
-                        SerialTransmit1(buff);
-                    } else {
-                        // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
-                        ClearFIFO();
-                    }
-                }
-                printf("button_mode: %d",button_mode);
-            //END OF UART CODE
-
-       
 
             switch (movement_state) {
-         
-                case STOP: 
-                    LATBbits.LATB12 = 1; //left
-                    LATBbits.LATB10 = 1; //right
-                    TRISAbits.TRISA1 = 0; //servo
-                    waitms(500);
-                    LATBbits.LATB12 = 0; //left
-                    LATBbits.LATB10 = 0; //right
-                    TRISAbits.TRISA1 = 1; //servo
-                    waitms(250);
-                    LATBbits.LATB12 = 1; //left
-                    LATBbits.LATB10 = 1; //right
-                    TRISAbits.TRISA1 = 0; //servo
-                    waitms(500);
-                    LATBbits.LATB12 = 0; //left
-                    LATBbits.LATB10 = 0; //right
-                    TRISAbits.TRISA1 = 1; //servo
-                    waitms(250);
-                    button_mode = 0; //sets mode to manual to stop auto code
-                    break;
-
                 case START:
                 //TURN OFF LEDS
                 LATBbits.LATB12 = 0; //left
@@ -862,8 +832,7 @@ void main(void)
 
                 case COIN_DETECTED:
                     //give time to let car reverse back to coin before stopping
-         
-                    coincount++;           printf("COIN DETECTED\r\n");
+                    printf("COIN DETECTED\r\n");
                     waitms(COIN_REVERSE_TIME);
                     __builtin_disable_interrupts();
                     ISR_pwm1 = 1; //motor1
@@ -921,43 +890,25 @@ void main(void)
                     waitms(500);
 
                     //set movement back to FORWARD, activate PWM to move forward
-                    
+                    __builtin_disable_interrupts();
+                    ISR_pwm1 = 100; //motor1
+                    ISR_pwm2 = 1; //motor1
+                    ISR_pwm3 = 100; //motor2
+                    ISR_pwm4 = 1; //motor2
+                    __builtin_enable_interrupts();
                     TRISAbits.TRISA1 = 1; //servo light off
-
-
-                    if (coincount == 20) {
-                        //set movement back to STOP, utrn off motors
-                        __builtin_disable_interrupts();
-                        ISR_pwm1 = 100; //motor1
-                        ISR_pwm2 = 1; //motor1
-                        ISR_pwm3 = 100; //motor2
-                        ISR_pwm4 = 1; //motor2
-                        __builtin_enable_interrupts();
-                        coincount = 0; //reset coincount;
-                        movement_state = STOP;
-                    } else {
-                        //set movement back to FORWARD, activate PWM to move forward
-                        __builtin_disable_interrupts();
-                        ISR_pwm1 = 100; //motor1
-                        ISR_pwm2 = 1; //motor1
-                        ISR_pwm3 = 100; //motor2
-                        ISR_pwm4 = 1; //motor2
-                        __builtin_enable_interrupts();
-                        movement_state = FORWARD; //set back to FORWARD to resume searching
-                    }        
+                    movement_state = FORWARD; //set back to FORWARD to resume searching
                     break;
             } 
         } //END OF AUTO CODE
 
         
-        else  { //if (button_mode != last_button_state)
+        else { //if (button_mode != last_button_state)
             //button_mode = 0; 
             //last_button_state = 1;
             TRISAbits.TRISA1 = 1; //servo off
 
             printf("Speedx: %d, Speedy: %d,Inductor: %f Perimeter1: %f,Perimeter2: %f", speedx, speedy,Inductor,perimeter1,perimeter2);
-            //printf("perimeter1: %f, perimeter2: %f\r\n", perimeter1, perimeter2); 
-            //printf("Inductor=%f\r\n", Inductor);
 
             if(speedy>1) {
                 //LED's off
@@ -1014,56 +965,6 @@ void main(void)
             //directly tell us if metal content is present 
             
 		}
-
-            if (!button_coin) {
-
-                if(U1STAbits.URXDA) { // Something has arrived
-                c = U1RXREG;
-                    // Master is sending message
-                    if(c =='!') {
-                        //SerialReceive1_timeout(buff, sizeof(buff)-1);
-                        
-                        //printf("I am breaking here1 \r\n");
-                        SerialReceive1_timeout(buff, sizeof(buff)-1); //why
-                        //this line is casuing isuses when it loops twice fine the first time then it breaks 
-                        //printf("I am breaking here2 \r\n");
-                        i = 0;
-                        token = strtok(buff, " ");
-                        //printf("I am breaking here3 \r\n");
-                        while(token != NULL && i < 5)
-                        {
-                            values[i] = atoi(token);
-                            token = strtok(NULL, " ");
-                            i++;
-                        }
-                        //printf("I am breaking here4 \r\n");
-    
-                        speedx = values[0];
-                        speedy = values[1];
-                        button_mode = values[2];
-                        button_extra = values[4];
-                        button_coin = values[3];
-                        //printf("I am breaking here5 \r\n");
-        
-                        if (strlen(buff) == 7) {
-                            printf("Master says: %s\r\n", buff);
-                        } else {
-                            // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave 
-                            printf("*** BAD MESSAGE ***: %s\r\n", buff);
-                            ClearFIFO();
-                        }
-                    } else if (c=='@') { // Master wants slave data
-                        sprintf(buff, "%lu\n", f);
-                        cnt++;
-                        delayms(10); // The radio seems to need this delay...
-                        SerialTransmit1(buff);
-                    } else {
-                        // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
-                        ClearFIFO();
-                    }
-                }
-            }
-
             //servo
 
             if(button_coin &&latch ==0) {

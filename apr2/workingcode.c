@@ -564,9 +564,9 @@ void main(void)
 
     int adcval1, adcval2; 
     float perimeter1, perimeter2;
-    double perimeterPeakVal1 = 0.09; //should be over 3 for peak detection
-    double perimeterPeakVal2 = 0.09;
-    double coin_threshold = 0.12;
+    double perimeterPeakVal1 = 2.00; //should be over 3 for peak detection
+    double perimeterPeakVal2 = 0.02;
+    double coin_threshold = 0.027;
     int searchFlag = 1; 
     int coinflag =0;
 
@@ -654,10 +654,9 @@ void main(void)
         adcval2= ADCRead(5); //pin 7 
         perimeter2=adcval2*3.3/1023.0;
         
-        if (button_mode == last_button_state) { //auto mode
+        if (button_mode) { //auto mode
             
-            button_mode = 0;
-            last_button_state = 0; 
+             
             
             //INSERT UART COMMUNICATON CODE HERE
             printf("button_mode: %d",button_mode);
@@ -748,7 +747,7 @@ void main(void)
                             ct = (c1*c1)/(c1+c2);
                             Inductor = 1 / (39.4784*f*f*ct); // L=1/(4*pi^2*f^2*C) 4pi^2~39.4784
 
-                            if (Inductor > coin_threshold) { //threshold value
+                            if (Inductor < coin_threshold) { //threshold value
                                 //start moving robot backwards back to coin
                                 __builtin_disable_interrupts();
                                 ISR_pwm1 = 1; //motor1
@@ -869,9 +868,8 @@ void main(void)
         } //END OF AUTO CODE
 
         
-        else if (button_mode != last_button_state) {
-            button_mode = 0; 
-            last_button_state = 1;
+        else {
+            
 
             printf("Speedx: %d, Speedy: %d,Inductor: %f Perimeter1: %f,Perimeter2: %f", speedx, speedy,Inductor,perimeter1,perimeter2);
             //printf("perimeter1: %f, perimeter2: %f\r\n", perimeter1, perimeter2); 
@@ -943,8 +941,8 @@ void main(void)
                         speedx = values[0];
                         speedy = values[1];
                         button_mode = values[2];
-                        button_extra = values[3];
-                        button_coin = values[4];
+                        button_extra = values[4];
+                        button_coin = values[3];
                         //printf("I am breaking here5 \r\n");
         
                         if (strlen(buff) == 7) {
