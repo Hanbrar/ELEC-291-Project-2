@@ -414,6 +414,7 @@ int main(void)
 			if(strlen(buff)>0) // Check for valid message size (5 characters + new line '\n')
 			{
                 int i;
+                // Remove any trailing new line characters from the buffer
                 for (i = 0; buff[i] != '\0'; i++) {
                     if (buff[i] == '\n' || buff[i] == '\r') {
                         buff[i] = '\0';
