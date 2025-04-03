@@ -303,7 +303,9 @@ void main(void)
 
 	// We should select an unique device ID.  The device ID can be a hex
 	// number from 0x0000 to 0xFFFF.  In this case is set to 0xABBA
-	SendATCommand("AT+DVIDFEEF\r\n");  
+    SendATCommand("AT+DVIDCACC\r\n");
+    SendATCommand("AT+RFC030\r\n");
+
 
 	cnt=0;
 	while(1)

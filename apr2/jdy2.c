@@ -40,36 +40,6 @@
 #define Baud2BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 #define Baud1BRG(desired_baud)( (SYSCLK / (16*desired_baud))-1)
 
-enum MovementState {
-    START,
-    FORWARD,
-    BACKWARD,
-    RIGHT_45,
-    LEFT_90,
-    COIN_DETECTED
-};
-
-// enum CoinSubState {
-//     COIN_REVERSE,
-//     COIN_SERVO,
-//     COIN_RESUME
-// };
-
-volatile enum MovementState movement_state = START; //set default state
-//volatile unsigned int state_start_time = 0;
-
-//volatile enum CoinSubState coin_substate = COIN_STOP;
-//volatile unsigned int coin_start_time;
-//volatile int servo_position = 0;
-
-//subject to change 
-const unsigned int PWM_TURN = 70;
-const unsigned int COIN_REVERSE_TIME = 250;
-const unsigned int SERVO_STEP_DELAY = 500;
-const unsigned int BACKWARD_TIME = 500;
-const unsigned int RIGHT_45_TIME = 250; //~30deg
-const unsigned int LEFT_90_TIME = 1000;   
-
 //servo
 volatile int ISR_pwm5=10, ISR_pwm6=7;
 volatile int ISR_pw=100, ISR_cnt2=0, ISR_frc;
@@ -134,7 +104,7 @@ void __ISR(_TIMER_1_VECTOR, IPL5SOFT) Timer1_Handler(void)
 		ISR_cnt2=0; // 2000 * 10us=20ms
 		ISR_frc++;
         LATBbits.LATB5 = 1; // Turn on RA2 (PWM output, pin 9)
-        LATBbits.LATB0 = 1; // Turn on RA4 (PWM output, pin 12)
+        LATBbits.LATB2 = 1; // Turn on RA4 (PWM output, pin 12)
 	}
 }
 
@@ -541,10 +511,7 @@ void main(void)
     
 	unsigned char LED_toggle=0;
 	float up,down,left,right;
-    int button_mode = 0; //0 is manual mode upon start up
-    int last_button_state = 1; //stores latched value
-    int button_extra;
-    int button_coin;
+    int button_auto,button_manual,button_coin;    
     ConfigurePins();
     SetupTimer1();
     ADCConf(); // Configure ADC
@@ -562,14 +529,9 @@ void main(void)
     int pw;
     int count1;
 
-    int adcval1, adcval2; 
+    int adcval1, adcval2;
     float perimeter1, perimeter2;
-    double perimeterPeakVal1 = 0.09; //should be over 3 for peak detection
-    double perimeterPeakVal2 = 0.09;
-    double coin_threshold = 0.12;
-    int searchFlag = 1; 
-    int coinflag =0;
-
+    
     volatile int servo_state = 0;
     volatile unsigned int servo_timer = 0;
     volatile int target_pwm5 = 150;
@@ -581,13 +543,13 @@ void main(void)
 	CFGCON = 0;
 
     /*SERVO PINS CONFIGURATION*/
-    // pin 14
+// pin 14
     // Configure RB2 as digital output for PWM5
-    // ANSELBbits.ANSB5 = 0;   // Disable analog on RB2
+   // ANSELBbits.ANSB5 = 0;   // Disable analog on RB2
     TRISBbits.TRISB5 = 0;   // Set RB2 as output
     LATBbits.LATB5 = 0;     // Initialize low
 
-    // pin 4
+// pin 4
     // Configure RB0 as digital output for PWM6
     ANSELBbits.ANSB0 = 0;     // Turn off analog on RB0
     TRISBbits.TRISB0 = 0;     // Set RB0 as output
@@ -641,271 +603,62 @@ void main(void)
     down=0;
     right=0;
     left=0;
+    button_auto=0;
+    button_manual=0;
     button_coin=0;
     speedx=1;
     speedy=1;
     latch=0;
 	while(1)
 	{	
-        printf("perimeter1:%lf  perimeter2:%lf  inductor:%lf\r\n", perimeter1, perimeter2, Inductor);
-        //AUTOCODE
+  
+
         adcval1 = ADCRead(4); //pin 6
-        perimeter1=adcval1*3.3/1023.0;
+    	perimeter1=adcval1*3.3/1023.0;
         adcval2= ADCRead(5); //pin 7 
         perimeter2=adcval2*3.3/1023.0;
-        
-        if (button_mode == last_button_state) { //auto mode
-            
-            button_mode = 0;
-            last_button_state = 0; 
-            
-            //INSERT UART COMMUNICATON CODE HERE
-            printf("button_mode: %d",button_mode);
-            if(U1STAbits.URXDA) { // Something has arrived
-                c = U1RXREG;
-                    // Master is sending message
-                    if(c =='!') {
-                        //SerialReceive1_timeout(buff, sizeof(buff)-1);
-                        
-                        //printf("I am breaking here1 \r\n");
-                        SerialReceive1_timeout(buff, sizeof(buff)-1); //why
-                        //this line is casuing isuses when it loops twice fine the first time then it breaks 
-                        //printf("I am breaking here2 \r\n");
-                        i = 0;
-                        token = strtok(buff, " ");
-                        //printf("I am breaking here3 \r\n");
-                        while(token != NULL && i < 5)
-                        {
-                            values[i] = atoi(token);
-                            token = strtok(NULL, " ");
-                            i++;
-                        }
-                        //printf("I am breaking here4 \r\n");
+
+        printf("Speedx: %d, Speedy: %d,Inductor: %f Perimeter1: %f,Perimeter2: %f", speedx, speedy,Inductor,perimeter1,perimeter2);
+        //printf("Perimeter1: %f, Perimeter2: %f\r\n", perimeter1, perimeter2); 
+       //printf("Inductor=%f\r\n", Inductor);
+        //printf("Speedx: %d, Speedy: %d,Inductor: %f\r\n", speedx, speedy,Inductor);
+
+        if(speedy>1){
+            ISR_pwm1 = speedy; //pin 9 - motor1 forawrd
+            ISR_pwm2 = 1; //pin 10  -motor1 backward
+            ISR_pwm3 = speedy; //pin 11 -motor2 forward
+            ISR_pwm4 = 1; //pin 12 -motor2 backward
+
+        }
+        else if(speedy<0){
+            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
+            ISR_pwm2 = -1*speedy; //pin 10  -motor1 backward
+            ISR_pwm3 = 1; //pin 11 -motor2 forward
+            ISR_pwm4 = -1*speedy; //pin 12 -motor2 backward
+
+        }
+        else if(speedx>1){
+            ISR_pwm1 = speedx; //pin 9 - motor1 forawrd
+            ISR_pwm2 = 1; //pin 10  -motor1 backward
+            ISR_pwm3 = 1; //pin 11 -motor2 forward
+            ISR_pwm4 = speedx; //pin 12 -motor2 backward
+        }
+        else if(speedx<0){
+            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
+            ISR_pwm2 = -1*speedx; //pin 10  -motor1 backward
+            ISR_pwm3 = -1*speedx; //pin 11 -motor2 forward
+            ISR_pwm4 = 1; //pin 12 -motor2 backward
+        }
+        else{
+            ISR_pwm1 = 1; //pin 9 - motor1 forawrd
+            ISR_pwm2 = 1; //pin 10  -motor1 backward
+            ISR_pwm3 = 1; //pin 11 -motor2 forward
+            ISR_pwm4 = 1; //pin 12 -motor2 backward
+        }
+        //printf("button:%d\r\n", button_coin);
+      
     
-                        speedx = values[0];
-                        speedy = values[1];
-                        button_mode = values[2];
-                        button_extra = values[3];
-                        button_coin = values[4];
-                        //printf("I am breaking here5 \r\n");
         
-                        if (strlen(buff) == 7) {
-                            printf("Master says: %s\r\n", buff);
-                        } else {
-                            // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave 
-                            ClearFIFO();
-                            printf("*** BAD MESSAGE ***: %s\r\n", buff);
-                          
-                        }
-                    } else if (c=='@') { // Master wants slave data
-                        sprintf(buff, "%f,%d\n", f);
-                        delayms(5); // The radio seems to need this delay...
-                        SerialTransmit1(buff);
-                    } else {
-                        // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
-                        ClearFIFO();
-                    }
-                }
-                printf("button_mode: %d",button_mode);
-            //END OF UART CODE
-
-       
-
-            switch (movement_state) {
-                case START:
-                printf("START\r\n");
-                    __builtin_disable_interrupts();
-                    //set the motors for forward when we enter FORWARD state
-                    ISR_pwm1 = 100; //motor1
-                    ISR_pwm2 = 1; //motor1
-                    ISR_pwm3 = 100; //motor2
-                    ISR_pwm4 = 1; //motor2
-                    __builtin_enable_interrupts();
-                    movement_state = FORWARD;
-                    break;
-
-                case FORWARD:
-               // printf("FORWARD\r\n");
-                printf("peak_detector\r\n");
-                
-                //printf("perimeter2:%lf\r\n", perimeter2);
-                //printf("inductor:%lf\r\n", Inductor);
-
-                    if (perimeter1 > perimeterPeakVal1 || perimeter2 > perimeterPeakVal2) {
-                        //reverse motors, disbale/enable interrupts to prevent pwm abnormalities
-                        __builtin_disable_interrupts();
-                        //set the motors in reverse for when we enter BACKWARD state
-                        ISR_pwm1 = 1; //motor1
-                        ISR_pwm2 = 100; //motor1
-                        ISR_pwm3 = 1; //motor2
-                        ISR_pwm4 = 100; //motor2
-                        __builtin_enable_interrupts();
-                        movement_state = BACKWARD; //need to move backward now
-                    } else { //if perimeter is not detected, check for metal detection
-                        count = GetPeriod(100);
-                        if (count > 0) {
-                            f = ((SYSCLK/2L)*100L)/count; 
-                            ct = (c1*c1)/(c1+c2);
-                            Inductor = 1 / (39.4784*f*f*ct); // L=1/(4*pi^2*f^2*C) 4pi^2~39.4784
-
-                            if (Inductor > coin_threshold) { //threshold value
-                                //start moving robot backwards back to coin
-                                __builtin_disable_interrupts();
-                                ISR_pwm1 = 1; //motor1
-                                ISR_pwm2 = PWM_TURN; //motor1
-                                ISR_pwm3 = 1; //motor2
-                                ISR_pwm4 = PWM_TURN; //motor2
-                                __builtin_enable_interrupts();     
-                                movement_state = COIN_DETECTED;
-                            }
-                        }
-                    } break;
-
-                case BACKWARD:
-                    printf("BACKWARD\r\n");
-                    if (searchFlag) {
-                        waitms(BACKWARD_TIME); //lets car go backwards for half a second, then turns 45 right
-                        __builtin_disable_interrupts();
-                        ISR_pwm1 = PWM_TURN; //motor1
-                        ISR_pwm2 = 1; //motor1
-                        ISR_pwm3 = 1; //motor2
-                        ISR_pwm4 = PWM_TURN; //motor2
-                        __builtin_enable_interrupts();
-                        waitms(RIGHT_45_TIME);
-                        __builtin_disable_interrupts();
-                        ISR_pwm1 = 100; //motor1
-                        ISR_pwm2 = 1; //motor1
-                        ISR_pwm3 = 100; //motor2
-                        ISR_pwm4 = 1; //motor2
-                        __builtin_enable_interrupts();
-                        movement_state = FORWARD; //set back to FORWARD to resume searching
-                    } else {
-                        waitms(BACKWARD_TIME); //lets car go backwards for half a second, then turns 90 left
-                        __builtin_disable_interrupts();
-                        ISR_pwm1 = 1; //motor1
-                        ISR_pwm2 = 70; //motor1
-                        ISR_pwm3 = 70; //motor2
-                        ISR_pwm4 = 1; //motor2
-                        __builtin_enable_interrupts();
-                        waitms(LEFT_90_TIME);
-                        __builtin_disable_interrupts();
-                        ISR_pwm1 = 100; //motor1
-                        ISR_pwm2 = 1; //motor1
-                        ISR_pwm3 = 100; //motor2
-                        ISR_pwm4 = 1; //motor2
-                        __builtin_enable_interrupts();
-                        movement_state = FORWARD; //set back to FORWARD to resume searching
-                    }
-                    searchFlag = !searchFlag; //flip flag to choose different directions each time perimeter detected
-                    break;
-
-                case COIN_DETECTED:
-                    //give time to let car reverse back to coin before stopping
-                    printf("COIN DETECTED\r\n");
-                    waitms(COIN_REVERSE_TIME);
-                    __builtin_disable_interrupts();
-                    ISR_pwm1 = 1; //motor1
-                    ISR_pwm2 = 1; //motor1
-                    ISR_pwm3 = 1; //motor2
-                    ISR_pwm4 = 1; //motor2
-                    __builtin_enable_interrupts();
-                    printf("AUTO SERVO\r\n");
-
-                    //SERVO CODE HERE
-                //state0
-                    printf("state0\r\n");
-                    waitms(1000);
-                    ISR_pwm5 = 10;
-                    ISR_pwm6 = 7;
-                    waitms(500);
-                //state1
-                    printf("state1\r\n");
-                    ISR_pwm6 = 19;
-                    waitms(500);     // Hold for 0.5 seconds
-
-                //state2
-                    printf("state2\r\n");
-                    LATAbits.LATA0 = 1;
-                    for(count1 = 100; count1 <= 150;count1++){
-                        ISR_pwm5 = count1/10;
-                        waitms(6);
-                    }
-
-                    waitms(500);
-                //state3
-
-                    for(count1 = 180; count1 >= 70;count1--){
-                        ISR_pwm6 = count1/10;
-                        waitms(6);
-                    }
-                    printf("afterloop1\r\n");
-                    waitms(250);
-                //state4
-
-                    for(count1 = 150; +count1 >= 65;count1--){
-                        ISR_pwm5 = count1/10;
-                        waitms(6);
-                    }
-                    waitms(250);
-                    printf("afterloop2\r\n");
-                    LATAbits.LATA0 = 0;
-                    waitms(1250);
-                //back to beginning
-                    printf("orignal state\r\n");
-                    ISR_pwm5 = 10;
-                    ISR_pwm6 = 7;
-                    waitms(500);
-
-                    //set movement back to FORWARD, activate PWM to move forward
-                    __builtin_disable_interrupts();
-                    ISR_pwm1 = 100; //motor1
-                    ISR_pwm2 = 1; //motor1
-                    ISR_pwm3 = 100; //motor2
-                    ISR_pwm4 = 1; //motor2
-                    __builtin_enable_interrupts();
-                    movement_state = FORWARD; //set back to FORWARD to resume searching
-                    break;
-            } 
-        } //END OF AUTO CODE
-
-        
-        else if (button_mode != last_button_state) {
-            button_mode = 0; 
-            last_button_state = 1;
-
-            printf("Speedx: %d, Speedy: %d,Inductor: %f Perimeter1: %f,Perimeter2: %f", speedx, speedy,Inductor,perimeter1,perimeter2);
-            //printf("perimeter1: %f, perimeter2: %f\r\n", perimeter1, perimeter2); 
-            //printf("Inductor=%f\r\n", Inductor);
-
-            if(speedy>1) {
-                ISR_pwm1 = speedy; //pin 9 - motor1 forawrd
-                ISR_pwm2 = 1; //pin 10  -motor1 backward
-                ISR_pwm3 = speedy; //pin 11 -motor2 forward
-                ISR_pwm4 = 1; //pin 12 -motor2 backward
-
-            } else if (speedy<0) {
-                ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-                ISR_pwm2 = -1*speedy; //pin 10  -motor1 backward
-                ISR_pwm3 = 1; //pin 11 -motor2 forward
-                ISR_pwm4 = -1*speedy; //pin 12 -motor2 backward
-            } else if (speedx>1) {
-                ISR_pwm1 = speedx; //pin 9 - motor1 forawrd
-                ISR_pwm2 = 1; //pin 10  -motor1 backward
-                ISR_pwm3 = 1; //pin 11 -motor2 forward
-                ISR_pwm4 = speedx; //pin 12 -motor2 backward
-            } else if (speedx<0) {
-                ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-                ISR_pwm2 = -1*speedx; //pin 10  -motor1 backward
-                ISR_pwm3 = -1*speedx; //pin 11 -motor2 forward
-                ISR_pwm4 = 1; //pin 12 -motor2 backward
-            } else {
-                ISR_pwm1 = 1; //pin 9 - motor1 forawrd
-                ISR_pwm2 = 1; //pin 10  -motor1 backward
-                ISR_pwm3 = 1; //pin 11 -motor2 forward
-                ISR_pwm4 = 1; //pin 12 -motor2 backward
-            }
-
-                  
         count=GetPeriod(100);
 		if(count>0)
 		{
@@ -916,114 +669,136 @@ void main(void)
             //directly tell us if metal content is present 
             
 		}
-
-            if (!button_coin) {
-
-                if(U1STAbits.URXDA) { // Something has arrived
-                c = U1RXREG;
-                    // Master is sending message
-                    if(c =='!') {
-                        //SerialReceive1_timeout(buff, sizeof(buff)-1);
-                        
-                        //printf("I am breaking here1 \r\n");
-                        SerialReceive1_timeout(buff, sizeof(buff)-1); //why
-                        //this line is casuing isuses when it loops twice fine the first time then it breaks 
-                        //printf("I am breaking here2 \r\n");
-                        i = 0;
-                        token = strtok(buff, " ");
-                        //printf("I am breaking here3 \r\n");
-                        while(token != NULL && i < 5)
-                        {
-                            values[i] = atoi(token);
-                            token = strtok(NULL, " ");
-                            i++;
-                        }
-                        //printf("I am breaking here4 \r\n");
-    
-                        speedx = values[0];
-                        speedy = values[1];
-                        button_mode = values[2];
-                        button_extra = values[3];
-                        button_coin = values[4];
-                        //printf("I am breaking here5 \r\n");
         
-                        if (strlen(buff) == 7) {
-                            printf("Master says: %s\r\n", buff);
-                        } else {
-                            // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave 
-                            printf("*** BAD MESSAGE ***: %s\r\n", buff);
-                            ClearFIFO();
-                        }
-                    } else if (c=='@') { // Master wants slave data
-                        sprintf(buff, "%lu\n", f);
-                        cnt++;
-                        delayms(5); // The radio seems to need this delay...
-                        SerialTransmit1(buff);
-                    } else {
-                        // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
-                        ClearFIFO();
-                    }
+
+        
+        if(button_coin !=1){
+		if(U1STAbits.URXDA) // Something has arrived
+		{
+
+            
+            
+			c=U1RXREG;
+			if(c=='!') // Master is sending message
+			{
+				//SerialReceive1_timeout(buff, sizeof(buff)-1);
+                
+                //printf("I am breaking here1 \r\n");
+				SerialReceive1_timeout(buff, sizeof(buff)-1); //why
+ //this line is casuing isuses when it loops twice fine the first time then it breaks 
+                //printf("I am breaking here2 \r\n");
+                i = 0;
+                token = strtok(buff, " ");
+                //printf("I am breaking here3 \r\n");
+                while(token != NULL && i < 5)
+                {
+                    values[i] = atoi(token);
+                    token = strtok(NULL, " ");
+                    i++;
                 }
+                //printf("I am breaking here4 \r\n");
+
+                speedx = values[0];
+                speedy = values[1];
+                button_auto = values[2];
+                button_manual = values[3];
+                button_coin = values[4];
+                //printf("I am breaking here5 \r\n");
+  
+				if(strlen(buff)==7)
+				{
+					printf("Master says: %s\r\n", buff);
+				}
+				else
+				{
+					// Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
+					
+					printf("*** BAD MESSAGE ***: %s\r\n", buff);
+                    ClearFIFO();
+				}				
+			}
+			else if(c=='@') // Master wants slave data
+			{
+				sprintf(buff, "%05u\n", cnt);
+				cnt++;
+				delayms(5); // The radio seems to need this delay...
+				SerialTransmit1(buff);
+			}
+			else
+			{
+				// Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
+				ClearFIFO();
+			}
+			
+		}
+    }
+        //printf("I am breaking here6 \r\n");
+        
+//servo
+
+if(button_coin == 1 &&latch ==0){
+            
+    //state0
+    printf("button1:%d\r\n", button_coin);
+        
+                printf("state1\r\n");
+                waitms(1000);
+                ISR_pwm5 = 10;
+                ISR_pwm6 = 7;
+                waitms(500);
+    //state1
+               printf("state2\r\n");
+                ISR_pwm6 = 20;
+                waitms(500);     // Hold for 0.5 seconds
+    
+    //state2
+              printf("state3\r\n");
+                LATAbits.LATA0 = 1;
+                for(count1 = 100; count1 <= 150;count1++){
+                    ISR_pwm5 = count1/10;
+                    waitms(6);
+                }
+              
+                waitms(500);
+    //state3
+    
+                for(count1 = 180; count1 >= 70;count1--){
+                    ISR_pwm6 = count1/10;
+                    waitms(6);
+                }
+                printf("afterloop1\r\n");
+                waitms(250);
+    //state4
+    
+                for(count1 = 150; +count1 >= 65;count1--){
+                    ISR_pwm5 = count1/10;
+                    waitms(6);
+                }
+                waitms(250);
+                printf("afterloop2\r\n");
+                LATAbits.LATA0 = 0;
+                waitms(1250);
+    //back to beginning
+                printf("orignal state\r\n");
+                ISR_pwm5 = 10;
+                ISR_pwm6 = 7;
+                waitms(500);
+                latch=1;
+            
             }
 
-            //servo
-
-            if(button_coin &&latch ==0) {
-                //state0
-                            printf("button1:%d\r\n", button_coin);
-                            printf("state0\r\n");
-                            waitms(1000);
-                            ISR_pwm5 = 10;
-                            ISR_pwm6 = 7;
-                            waitms(500);
-                //state1
-                            printf("state1\r\n");
-                            ISR_pwm6 = 20;
-                            waitms(500);     // Hold for 0.5 seconds
-                
-                //state2
-                        printf("state2\r\n");
-                            LATAbits.LATA0 = 1;
-                            for(count1 = 100; count1 <= 150;count1++) {
-                                ISR_pwm5 = count1/10;
-                                waitms(6);
-                            }
-                        
-                            waitms(500);
-                //state3
-                
-                            for(count1 = 180; count1 >= 70;count1--) {
-                                ISR_pwm6 = count1/10;
-                                waitms(6);
-                            }
-                            printf("afterloop1\r\n");
-                            waitms(250);
-                //state4
-
-                            for(count1 = 150; count1 >= 65;count1--) {
-                                ISR_pwm5 = count1/10;
-                                waitms(6);
-                            }
-                            waitms(250);
-                            printf("afterloop2\r\n");
-                            LATAbits.LATA0 = 0;
-                            waitms(1250);
-                //back to beginning
-                            printf("orignal state\r\n");
-                            ISR_pwm5 = 10;
-                            ISR_pwm6 = 7;
-                            waitms(500);
-                            latch=1;
-                        
-            } else if (button_coin==0) {
+            else if(button_coin==0){
                 latch=0;
             }
 
-        printf("button3:%d\r\n", button_coin);
-        button_coin=0;
+            printf("button3:%d\r\n", button_coin);
+            button_coin=0;
 
-        }
+            
+        
+        
+	}
 
 
-    }
+
 }

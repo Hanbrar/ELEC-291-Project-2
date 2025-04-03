@@ -693,9 +693,8 @@ void main(void)
                             printf("Master says: %s\r\n", buff);
                         } else {
                             // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave 
-                            ClearFIFO();
                             printf("*** BAD MESSAGE ***: %s\r\n", buff);
-                          
+                            ClearFIFO();
                         }
                     } else if (c=='@') { // Master wants slave data
                         sprintf(buff, "%f,%d\n", f);
@@ -955,7 +954,7 @@ void main(void)
                             ClearFIFO();
                         }
                     } else if (c=='@') { // Master wants slave data
-                        sprintf(buff, "%lu\n", f);
+                        sprintf(buff, "%05u\n", cnt);
                         cnt++;
                         delayms(5); // The radio seems to need this delay...
                         SerialTransmit1(buff);
