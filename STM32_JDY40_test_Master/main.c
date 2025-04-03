@@ -334,8 +334,7 @@ int main(void)
     LCD_4BIT();        // Initialize the LCD in 4-bit mode :contentReference[oaicite:2]{index=2}
 
     // Optionally, print an initial message on the LCD.
-    LCDprint("Jamie Kang", 1, 1);
-    LCDprint("Initializing...", 2, 1);
+    LCDprint("Initializing...", 1, 1);
 
     waitms(1000); // Give time for terminal (e.g. putty) to start
     printf("\r\nJDY-40 Master test\r\n");

@@ -955,9 +955,9 @@ void main(void)
                             ClearFIFO();
                         }
                     } else if (c=='@') { // Master wants slave data
-                        sprintf(buff, "%lu\n", f);
+                        sprintf(buff, "%05u\n", cnt);
                         cnt++;
-                        delayms(5); // The radio seems to need this delay...
+                        delayms(10); // The radio seems to need this delay...
                         SerialTransmit1(buff);
                     } else {
                         // Clear the receive 8-level FIFO of the PIC32MX, so we get a fresh reply from the slave
