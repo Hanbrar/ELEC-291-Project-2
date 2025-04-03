@@ -414,6 +414,13 @@ int main(void)
 			egets2(buff, sizeof(buff)-1);
 			if(strlen(buff)>0) // Check for valid message size (5 characters + new line '\n')
 			{
+                int i;
+                for (i = 0; buff[i] != '\0'; i++) {
+                    if (buff[i] == '\n' || buff[i] == '\r') {
+                        buff[i] = '\0';
+                        break;
+                    }
+                }
 				printf("Slave says: %s\r", buff);
                 char displayStr[17];
                 sprintf(displayStr, "Freq: %s", buff);
