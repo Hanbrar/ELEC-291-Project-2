@@ -542,7 +542,9 @@ void main(void)
 	unsigned char LED_toggle=0;
 	float up,down,left,right;
     int button_mode = 0; //0 is manual mode upon start up
+    int mode_flag = 0;
     int last_button_state = 1; //stores latched value
+    int debounce;
     int button_extra;
     int button_coin;
     ConfigurePins();
@@ -552,7 +554,6 @@ void main(void)
     char *token;
 	int values[5] = {0,0,0,0,0}; // To store extracted digits
     int speedx,speedy;
-    int j;
 	int i = 0;
 
 	char buff[80];
@@ -663,10 +664,24 @@ void main(void)
         perimeter1=adcval1*3.3/1023.0;
         adcval2= ADCRead(5); //pin 7 
         perimeter2=adcval2*3.3/1023.0;
+
+        int current_button_state = button_mode;
+        if (current_button_state != last_button_state)
+        {
+            waitms(50); // debounce delay
+            if (button_mode == current_button_state)
+            {
+                last_button_state = current_button_state;
+                if (button_mode == 0)
+                {
+                    mode_flag = !mode_flag;
+                }
+            }
+        }
         
-        //button mode HI is auto
-        if (button_mode) { //auto mode //button_mode == last_button_state
+        if (mode_flag == 1) { //auto mode //button_mode == last_button_state
             
+            mode_flag = !mode_flag;
             //button_mode = 0;
             //last_button_state = 0; 
             
@@ -724,10 +739,6 @@ void main(void)
 
             switch (movement_state) {
                 case START:
-                //TURN OFF LEDS
-                LATBbits.LATB12 = 0; //left
-                LATBbits.LATB10 = 0; //right
-                TRISAbits.TRISA1 = 1; //servo
                 printf("START\r\n");
                     __builtin_disable_interrupts();
                     //set the motors for forward when we enter FORWARD state
@@ -740,10 +751,7 @@ void main(void)
                     break;
 
                 case FORWARD:
-                //TURN OFF LEDS
-                LATBbits.LATB12 = 0; //left
-                LATBbits.LATB10 = 0; //right
-                TRISAbits.TRISA1 = 1; //servo
+               // printf("FORWARD\r\n");
                 printf("peak_detector\r\n");
                 
                 //printf("perimeter2:%lf\r\n", perimeter2);
@@ -782,23 +790,13 @@ void main(void)
                 case BACKWARD:
                     printf("BACKWARD\r\n");
                     if (searchFlag) {
-                        for (j = 0; j <= BACKWARD_TIME; j = j + 100) { //blinks LEDS when in reverse
-                            LATBbits.LATB12 = 1;  //LEFT
-                            LATBbits.LATB10 = 1;  //RIGHT
-                            waitms(BACKWARD_TIME / 5);
-                            LATBbits.LATB12 = 0;  //LEFT
-                            LATBbits.LATB10 = 0;  //RIGHT
-                        }
-                        //waitms(BACKWARD_TIME); //lets car go backwards for half a second, then turns 45 right
+                        waitms(BACKWARD_TIME); //lets car go backwards for half a second, then turns 45 right
                         __builtin_disable_interrupts();
                         ISR_pwm1 = PWM_TURN; //motor1
                         ISR_pwm2 = 1; //motor1
                         ISR_pwm3 = 1; //motor2
                         ISR_pwm4 = PWM_TURN; //motor2
                         __builtin_enable_interrupts();
-                        //turn right light on
-                        LATBbits.LATB12 = 0;  //LEFT
-                        LATBbits.LATB10 = 1;  //RIGHT
                         waitms(RIGHT_45_TIME);
                         __builtin_disable_interrupts();
                         ISR_pwm1 = 100; //motor1
@@ -808,23 +806,13 @@ void main(void)
                         __builtin_enable_interrupts();
                         movement_state = FORWARD; //set back to FORWARD to resume searching
                     } else {
-                        for (j = 0; j <= BACKWARD_TIME; j = j + 100) { //blinks LEDS when in reverse
-                            LATBbits.LATB12 = 1;  //LEFT
-                            LATBbits.LATB10 = 1;  //RIGHT
-                            waitms(BACKWARD_TIME / 5);
-                            LATBbits.LATB12 = 0;  //LEFT
-                            LATBbits.LATB10 = 0;  //RIGHT
-                        }
-                        //waitms(BACKWARD_TIME); //lets car go backwards for half a second, then turns 90 left
+                        waitms(BACKWARD_TIME); //lets car go backwards for half a second, then turns 90 left
                         __builtin_disable_interrupts();
                         ISR_pwm1 = 1; //motor1
                         ISR_pwm2 = 70; //motor1
                         ISR_pwm3 = 70; //motor2
                         ISR_pwm4 = 1; //motor2
                         __builtin_enable_interrupts();
-                        //turn left light on
-                        LATBbits.LATB12 = 1;  //LEFT
-                        LATBbits.LATB10 = 0;  //RIGHT
                         waitms(LEFT_90_TIME);
                         __builtin_disable_interrupts();
                         ISR_pwm1 = 100; //motor1
@@ -851,8 +839,6 @@ void main(void)
 
                     //SERVO CODE HERE
                 //state0
-                
-                    TRISAbits.TRISA1 = 0; //servo light on
                     printf("state0\r\n");
                     waitms(1000);
                     ISR_pwm5 = 10;
@@ -903,26 +889,21 @@ void main(void)
                     ISR_pwm3 = 100; //motor2
                     ISR_pwm4 = 1; //motor2
                     __builtin_enable_interrupts();
-                    TRISAbits.TRISA1 = 1; //servo light off
                     movement_state = FORWARD; //set back to FORWARD to resume searching
                     break;
             } 
         } //END OF AUTO CODE
 
         
-        else { //if (button_mode != last_button_state)
-            //button_mode = 0; 
-            //last_button_state = 1;
-            TRISAbits.TRISA1 = 1; //servo off
+        else{
+            button_mode = 0; 
+            last_button_state = 1;
 
             printf("Speedx: %d, Speedy: %d,Inductor: %f Perimeter1: %f,Perimeter2: %f", speedx, speedy,Inductor,perimeter1,perimeter2);
             //printf("perimeter1: %f, perimeter2: %f\r\n", perimeter1, perimeter2); 
             //printf("Inductor=%f\r\n", Inductor);
 
             if(speedy>1) {
-                //LED's off
-                LATBbits.LATB12 = 0; //left
-                LATBbits.LATB10 = 0; //right
                 ISR_pwm1 = speedy; //pin 9 - motor1 forawrd
                 ISR_pwm2 = 1; //pin 10  -motor1 backward
                 ISR_pwm3 = speedy; //pin 11 -motor2 forward

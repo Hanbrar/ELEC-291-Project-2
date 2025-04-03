@@ -664,11 +664,10 @@ void main(void)
         adcval2= ADCRead(5); //pin 7 
         perimeter2=adcval2*3.3/1023.0;
         
-        //button mode HI is auto
-        if (button_mode) { //auto mode //button_mode == last_button_state
+        if (button_mode == last_button_state) { //auto mode //button_mode == last_button_state
             
-            //button_mode = 0;
-            //last_button_state = 0; 
+            button_mode = 0;
+            last_button_state = 0; 
             
             //INSERT UART COMMUNICATON CODE HERE
             printf("button_mode: %d",button_mode);
@@ -910,19 +909,15 @@ void main(void)
         } //END OF AUTO CODE
 
         
-        else { //if (button_mode != last_button_state)
-            //button_mode = 0; 
-            //last_button_state = 1;
-            TRISAbits.TRISA1 = 1; //servo off
+        else if (button_mode != last_button_state) {
+            button_mode = 0; 
+            last_button_state = 1;
 
             printf("Speedx: %d, Speedy: %d,Inductor: %f Perimeter1: %f,Perimeter2: %f", speedx, speedy,Inductor,perimeter1,perimeter2);
             //printf("perimeter1: %f, perimeter2: %f\r\n", perimeter1, perimeter2); 
             //printf("Inductor=%f\r\n", Inductor);
 
             if(speedy>1) {
-                //LED's off
-                LATBbits.LATB12 = 0; //left
-                LATBbits.LATB10 = 0; //right
                 ISR_pwm1 = speedy; //pin 9 - motor1 forawrd
                 ISR_pwm2 = 1; //pin 10  -motor1 backward
                 ISR_pwm3 = speedy; //pin 11 -motor2 forward

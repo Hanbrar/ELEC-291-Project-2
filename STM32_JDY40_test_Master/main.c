@@ -1,447 +1,174 @@
 #include "../Common/Include/stm32l051xx.h"
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "../Common/Include/serial.h"
-#include "UART2.h"
-#include <math.h>
 
-#define SYSCLK 32000000L
-#define DEF_F 15000L
-#define F_CPU 32000000L
-#define COIN_FREQ_THRESHOLD 20000
+volatile int Count = 0;
 
-// --- LCD Macros (from lcd.h) ---
-#define LCD_RS_0 (GPIOA->ODR &= ~BIT0)
-#define LCD_RS_1 (GPIOA->ODR |= BIT0)
-#define LCD_E_0  (GPIOA->ODR &= ~BIT1)
-#define LCD_E_1  (GPIOA->ODR |= BIT1)
-#define LCD_D4_0 (GPIOA->ODR &= ~BIT2)
-#define LCD_D4_1 (GPIOA->ODR |= BIT2)
-#define LCD_D5_0 (GPIOA->ODR &= ~BIT3)
-#define LCD_D5_1 (GPIOA->ODR |= BIT3)
-#define LCD_D6_0 (GPIOA->ODR &= ~BIT4)
-#define LCD_D6_1 (GPIOA->ODR |= BIT4)
-#define LCD_D7_0 (GPIOA->ODR &= ~BIT5)
-#define LCD_D7_1 (GPIOA->ODR |= BIT5)
-#define CHARS_PER_LINE 16
+//-----------------------------------------
+// User-configurable section
+//-----------------------------------------
+#define SYSCLK          32000000L
+#define PWM_RESOLUTION  255  // 8-bit resolution
 
+static uint32_t g_buzzerFrequency = 1000; // Start with 1 kHz
 
+//-----------------------------------------
+// Function Prototypes
+//-----------------------------------------
+void SystemClock_Init(void);
+void Hardware_Init(void);
+void SetBuzzerFrequency(uint32_t frequency);
+void BuzzerOn(void);
+void BuzzerOff(void);
+void ToggleLED(void);
 
-// --- Forward declarations for LCD functions ---
-void LCD_pulse(void);
-void LCD_byte(unsigned char x);
-void WriteData(unsigned char x);
-void WriteCommand(unsigned char x);
-void LCD_4BIT(void);
-void LCDprint(char * string, unsigned char line, unsigned char clear);
+//-----------------------------------------
+// System Clock Initialization
+//-----------------------------------------
+void SystemClock_Init(void) {
+    // Enable HSI (16 MHz) and switch to HSI+PLL for 32 MHz
+    RCC->CR |= RCC_CR_HSION;
+    while (!(RCC->CR & RCC_CR_HSIRDY)) {};
+    RCC->CFGR &= ~RCC_CFGR_SW;
+    RCC->CFGR |= RCC_CFGR_SW_HSI;
+    while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_HSI) {};
 
-// LQFP32 pinout
-//             ----------
-//       VDD -|1       32|- VSS
-//      PC14 -|2       31|- BOOT0
-//      PC15 -|3       30|- PB7
-//      NRST -|4       29|- PB6
-//      VDDA -|5       28|- PB5
-//       PA0 -|6       27|- PB4
-//       PA1 -|7       26|- PB3   <-- Used for one push button (or ADC)
-//       PA2 -|8       25|- PA15  (Used for RXD of UART2, connects to TXD of JDY40)
-//       PA3 -|9       24|- PA14  (Used for TXD of UART2, connects to RXD of JDY40)
-//       PA4 -|10      23|- PA13  (Used for SET of JDY40)
-//       PA5 -|11      22|- PA12
-//       PA6 -|12      21|- PA11
-//       PA7 -|13      20|- PA10  (Reserved for RXD of UART1)
-//       PB0 -|14      19|- PA9   (Reserved for TXD of UART1)
-//       PB1 -|15      18|- PA8   (pushbutton)
-//       VSS -|16      17|- VDD
-//             ----------
+    // Configure PLL to 32 MHz (HSI/2 * 4)
+    RCC->CFGR |= (RCC_CFGR_PLLMUL4 | RCC_CFGR_PLLDIV2);
+    RCC->CR   |= RCC_CR_PLLON;
+    while (!(RCC->CR & RCC_CR_PLLRDY)) {};
 
-//**************************************************************
-// Delay functions
-//**************************************************************
-// Uses SysTick to delay <us> micro-seconds.
-void Delay_us(unsigned char us)
-{
-    SysTick->LOAD = (F_CPU/(1000000L/us)) - 1;
-    SysTick->VAL = 0;
-    SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_ENABLE_Msk;
-    while((SysTick->CTRL & BIT16)==0);
-    SysTick->CTRL = 0x00;
+    // Switch to PLL
+    RCC->CFGR  = (RCC->CFGR & ~RCC_CFGR_SW) | RCC_CFGR_SW_PLL;
+    while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL) {};
 }
 
-void waitms (unsigned int ms)
-{
-    unsigned int j;
-    unsigned char k;
-    for(j=0; j<ms; j++)
-        for (k=0; k<4; k++) Delay_us(250);
+//-----------------------------------------
+// Buzzer Frequency Setter
+//-----------------------------------------
+/**
+ * @brief Updates the prescaler to achieve the desired PWM frequency.
+ *        Frequency = SYSCLK / [PSC+1] / [ARR+1]
+ *
+ * For an 8-bit resolution, ARR is fixed at 255.
+ * We solve for PSC:
+ *   PSC = (SYSCLK / (frequency * (ARR+1))) - 1
+ */
+void SetBuzzerFrequency(uint32_t frequency) {
+    if (frequency == 0) {
+        frequency = 1;  // Avoid divide-by-zero
+    }
+
+    // Temporarily disable Timer
+    TIM2->CR1 &= ~TIM_CR1_CEN;
+
+    // Recalculate prescaler for new frequency
+    TIM2->PSC = (uint16_t)((SYSCLK / (frequency * (PWM_RESOLUTION + 1))) - 1);
+
+    // Re-enable Timer
+    TIM2->CR1 |= TIM_CR1_CEN;
 }
 
-void wait_1ms(void)
-{
-    SysTick->LOAD = (F_CPU/1000L) - 1;
-    SysTick->VAL = 0;
-    SysTick->CTRL = SysTick_CTRL_CLKSOURCE_Msk | SysTick_CTRL_ENABLE_Msk;
-    while((SysTick->CTRL & BIT16)==0);
-    SysTick->CTRL = 0x00;
+//-----------------------------------------
+// Enable/Disable the Buzzer
+//-----------------------------------------
+void BuzzerOn(void) {
+    // Enable CH1 output
+    TIM2->CCER |= TIM_CCER_CC1E;
 }
 
-void delayms(int len)
-{
-    while(len--) wait_1ms();
+void BuzzerOff(void) {
+    // Disable CH1 output
+    TIM2->CCER &= ~TIM_CCER_CC1E;
 }
 
-
-// --- LCD Functions (from lcd.c) ---
-void LCD_pulse(void)
-{
-    LCD_E_1;
-    Delay_us(40);
-    LCD_E_0;
+//-----------------------------------------
+// Simple LED Toggle (PA0)
+//-----------------------------------------
+void ToggleLED(void) {
+    GPIOA->ODR ^= (1 << 0); // Toggle PA0
 }
 
-void LCD_byte(unsigned char x)
-{
-    // Send high nibble
-    if(x & 0x80) LCD_D7_1; else LCD_D7_0;
-    if(x & 0x40) LCD_D6_1; else LCD_D6_0;
-    if(x & 0x20) LCD_D5_1; else LCD_D5_0;
-    if(x & 0x10) LCD_D4_1; else LCD_D4_0;
-    LCD_pulse();
-    Delay_us(40);
-    // Send low nibble
-    if(x & 0x08) LCD_D7_1; else LCD_D7_0;
-    if(x & 0x04) LCD_D6_1; else LCD_D6_0;
-    if(x & 0x02) LCD_D5_1; else LCD_D5_0;
-    if(x & 0x01) LCD_D4_1; else LCD_D4_0;
-    LCD_pulse();
+//-----------------------------------------
+// TIM2 Interrupt Handler
+//-----------------------------------------
+void TIM2_Handler(void) {
+    // Clear update interrupt flag
+    TIM2->SR &= ~1; // SR & ~BIT0
+
+    Count++;
+    if (Count >= 1000) {
+        // Toggle LED every 1 second (optional)
+        ToggleLED();
+        Count = 0;
+    }
 }
 
-void WriteData(unsigned char x)
-{
-    LCD_RS_1;
-    LCD_byte(x);
-    waitms(2);
-}
-
-void WriteCommand(unsigned char x)
-{
-    LCD_RS_0;
-    LCD_byte(x);
-    waitms(5);
-}
-
-void LCD_4BIT(void)
-{
-    LCD_E_0;  // Resting state of LCD enable is 0
-    waitms(20);
-    // Force LCD to 8-bit mode first then switch to 4-bit mode
-    WriteCommand(0x33);
-    WriteCommand(0x33);
-    WriteCommand(0x32);  // Set 4-bit mode
-    // LCD configuration: 2 lines, 5x8 font, display on, clear display
-    WriteCommand(0x28);
-    WriteCommand(0x0c);
-    WriteCommand(0x01);
-    waitms(20);
-}
-
-void LCDprint(char * string, unsigned char line, unsigned char clear)
-{
-    int j;
-    WriteCommand(line == 2 ? 0xc0 : 0x80);
-    waitms(5);
-    for(j = 0; string[j] != 0; j++)
-        WriteData(string[j]);
-    if(clear)
-        for(; j < CHARS_PER_LINE; j++)
-            WriteData(' ');
-}
-
-//**************************************************************
+//-----------------------------------------
 // Hardware Initialization
-//**************************************************************
-void Hardware_Init(void)
-{
-    GPIOA->OSPEEDR = 0xffffffff; // All pins of port A set to very high speed
-    RCC->IOPENR |= BIT0;         // Enable clock for port A
+//-----------------------------------------
+void Hardware_Init(void) {
+    SystemClock_Init(); // Initialize system clock to 32 MHz
 
-    // Configure PA13 as output (used for setting AT mode on JDY-40)
-    GPIOA->MODER = (GPIOA->MODER & ~(BIT27|BIT26)) | BIT26;
-    GPIOA->ODR |= BIT13; // Set PA13 to 1 = normal operation
+    //-------------------------------------
+    // Configure PA0 (LED) as output
+    //-------------------------------------
+    RCC->IOPENR |= (1 << 0);            // Enable GPIOA clock
+    GPIOA->MODER &= ~((1 << 0) | (1 << 1)); // Clear bits for PA0
+    GPIOA->MODER |=  (1 << 0);         // Set PA0 as output (01)
 
-    // Configure PA8 as input with pull-up (if used as a pushbutton)
-    GPIOA->MODER &= ~(BIT16 | BIT17);
-    GPIOA->PUPDR |= BIT16; 
-    GPIOA->PUPDR &= ~(BIT17);
+    //-------------------------------------
+    // Configure PA15 (TIM2_CH1) as alternate function
+    //-------------------------------------
+    // Clear bits for PA15, then set AF mode
+    GPIOA->MODER &= ~((1 << 30) | (1 << 31)); 
+    GPIOA->MODER |=  (1 << 31);    // AF mode (10) for PA15
+    // Set AF5 for TIM2_CH1
+    GPIOA->AFR[1] |= (5 << (4 * (15 - 8))); 
+
+    //-------------------------------------
+    // TIM2 Configuration
+    //-------------------------------------
+    RCC->APB1ENR |= (1 << 0); // Enable TIM2 clock
+
+    // Set prescaler for the initial buzzerFrequency
+    TIM2->PSC  = (uint16_t)((SYSCLK / (g_buzzerFrequency * (PWM_RESOLUTION + 1))) - 1);
+    TIM2->ARR  = PWM_RESOLUTION;    // 8-bit resolution
+    TIM2->CCR1 = 128;               // 50% duty cycle for stable tone
+
+    // PWM Mode 1 configuration on CH1: OC1M = 110, OC1PE enabled
+    TIM2->CCMR1 |= (6 << 4) | (1 << 3);
+    // Enable CH1 output
+    TIM2->CCER  |= (1 << 0);
+
+    // Auto-reload preload enable
+    TIM2->CR1   |= (1 << 7); 
+    // Enable TIM2
+    TIM2->CR1   |= (1 << 0);
+
+    //-------------------------------------
+    // Interrupt Configuration
+    //-------------------------------------
+    TIM2->DIER  |= 1;            // Enable update interrupt
+    NVIC->ISER[0] |= (1 << 15);  // Enable TIM2 interrupt in NVIC
+
+    __enable_irq();
 }
 
-// Configure_Pins: sets up ADC input and a secondary pushbutton (if needed)
-void Configure_Pins(void)
-{
-    // Configure PB1 (pin 15) as an analog input (if needed for other purposes)
-    RCC->IOPENR |= BIT1;
-    GPIOB->MODER |= (BIT2 | BIT3);
-
-    // Configure PB13 as a digital input with pull-up (example configuration)
-    GPIOB->MODER &= ~(BIT26 | BIT27);
-    GPIOB->PUPDR |= BIT26;
-    GPIOB->PUPDR &= ~BIT27;
-}
-
-// Configure_Buttons: set up PB3, PB5, and PB6 as inputs with internal pull-ups
-// (These correspond to Auto_mode, Manual_mode, and coin_picking)
-void Configure_Buttons(void)
-{
-    RCC->IOPENR |= BIT1; // Enable clock for Port B
-
-    // Set PB3, PB5, and PB6 as inputs (00)
-    GPIOB->MODER &= ~(0x3 << (3 * 2)); // PB3
-    GPIOB->MODER &= ~(0x3 << (5 * 2)); // PB5
-    GPIOB->MODER &= ~(0x3 << (6 * 2)); // PB6
-
-    // Enable internal pull-ups (01)
-    GPIOB->PUPDR &= ~(0x3 << (3 * 2));
-    GPIOB->PUPDR |=  (0x1 << (3 * 2));
-
-    GPIOB->PUPDR &= ~(0x3 << (5 * 2));
-    GPIOB->PUPDR |=  (0x1 << (5 * 2));
-
-    GPIOB->PUPDR &= ~(0x3 << (6 * 2));
-    GPIOB->PUPDR |=  (0x1 << (6 * 2));
-}
-
-//**************************************************************
-// ADC Functions
-//**************************************************************
-void initADC(void)
-{
-    RCC->APB2ENR |= BIT9; // Enable ADC clock
-
-    // Select PCLK as ADC clock source
-    ADC1->CFGR2 |= ADC_CFGR2_CKMODE;
-
-    // ADC enable sequence
-    ADC1->ISR |= ADC_ISR_ADRDY;
-    ADC1->CR |= ADC_CR_ADEN;
-    if ((ADC1->CFGR1 & ADC_CFGR1_AUTOFF) == 0)
-    {
-        while ((ADC1->ISR & ADC_ISR_ADRDY) == 0){}
-    }
-
-    // Calibration procedure
-    if ((ADC1->CR & ADC_CR_ADEN) != 0)
-    {
-        ADC1->CR |= ADC_CR_ADDIS;
-    }
-    ADC1->CR |= ADC_CR_ADCAL;
-    while ((ADC1->ISR & ADC_ISR_EOCAL) == 0){}
-    ADC1->ISR |= ADC_ISR_EOCAL;
-}
-
-int readADC(unsigned int channel)
-{
-    ADC1->CFGR1 |= ADC_CFGR1_AUTOFF;
-    ADC1->CHSELR = channel;
-    ADC1->SMPR |= ADC_SMPR_SMP_0 | ADC_SMPR_SMP_1 | ADC_SMPR_SMP_2;
-    if(channel == ADC_CHSELR_CHSEL17)
-    {
-        ADC->CCR |= ADC_CCR_VREFEN;
-    }
-    ADC1->CR |= ADC_CR_ADSTART;
-    while ((ADC1->ISR & ADC_ISR_EOC) == 0){}
-    return ADC1->DR;
-}
-
-//**************************************************************
-// JDY-40 (or jpy) Communication Functions
-//**************************************************************
-void SendATCommand(char * s)
-{
-    char buff[40];
-    printf("Command: %s", s);
-    GPIOA->ODR &= ~(BIT13); // Set PA13 to 0 => AT mode
-    waitms(10);
-    eputs2(s);
-    egets2(buff, sizeof(buff)-1);
-    GPIOA->ODR |= BIT13; // Back to normal mode
-    waitms(10);
-    printf("Response: %s", buff);
-}
-
-void ReceptionOff(void)
-{
-    GPIOA->ODR &= ~(BIT13); // Set AT mode
-    waitms(10);
-    eputs2("AT+DVID0000\r\n");
-    waitms(10);
-    GPIOA->ODR |= BIT13; // Return to normal operation
-    while (ReceivedBytes2() > 0) 
-        egetc2(); // Clear FIFO
-}
-
-// input: adc voltage
-// output: duty cycle (0-100%), deviation from 1.6V
-int voltageToDuty(float adc_v)
-{
-	int duty = (int)(((adc_v - 1.6) / 1.6) * 100.0);
-
-	if (duty > 100) {
-		duty = 100;
-	} else if (duty < -100) {
-		duty = -100;
-	}
-
-	if (abs(duty) < 5) {
-		duty = 1;
-	}
-
-    return (duty);
-}
-
-
-// Sets up PA0-PA5 for LCD control and data signals.
-void LCD_GPIO_Init(void)
-{
-    RCC->IOPENR |= BIT0;
-    GPIOA->MODER &= ~0xFFF;  // Clear mode bits for PA0-PA5 (12 bits total)
-    GPIOA->MODER |= 0x555;   // Set PA0-PA5 as outputs (binary 0101 0101 0101)
-    GPIOA->OTYPER &= ~0x3F;  // Set PA0-PA5 to push-pull
-}
-
-//**************************************************************
-// Main Function
-//**************************************************************
-int main(void)
-{
-    char buff[80];
-    int timeout_cnt = 0;
-    int up, down, left, right, duty_x, duty_y;
-    int button_auto, button_manual, button_coin;
-    int j8, j9;
-	float adc_v8, adc_v9;
-
+//-----------------------------------------
+// Main Application
+//-----------------------------------------
+int main(void) {
     Hardware_Init();
-    initUART2(9600);
-    Configure_Pins();
-    Configure_Buttons(); // <<< Added call so the push buttons are correctly set up
-    initADC();
 
+    // Turn the buzzer on (stable tone @ 1 kHz, 50% duty)
+    BuzzerOn();
+    SetBuzzerFrequency(800); // Set initial frequency
+    
+    // [Optionally] you can also change the frequency later with:
+    // SetBuzzerFrequency(2000); // e.g., 2 kHz
+    // BuzzerOn();  // Ensure it’s still on if you toggled it off before
 
-    // LCD Code
-    // --- LCD Initialization ---
-    LCD_GPIO_Init();   // Configure PA0–PA5 for the LCD (RS, E, D4–D7)
-    LCD_4BIT();        // Initialize the LCD in 4-bit mode :contentReference[oaicite:2]{index=2}
-
-    // Optionally, print an initial message on the LCD.
-    LCDprint("Initializing...", 1, 1);
-
-    waitms(1000); // Give time for terminal (e.g. putty) to start
-    printf("\r\nJDY-40 Master test\r\n");
-
-    ReceptionOff();
-
-    // Check and configure JDY-40 settings via AT commands
-    SendATCommand("AT+VER\r\n");
-    SendATCommand("AT+BAUD\r\n");
-    SendATCommand("AT+RFID\r\n");
-    SendATCommand("AT+DVID\r\n");
-    SendATCommand("AT+RFC\r\n");
-    SendATCommand("AT+POWE\r\n");
-    SendATCommand("AT+CLSS\r\n");
-
-    SendATCommand("AT+DVIDCACC\r\n");
-    SendATCommand("AT+RFC030\r\n");
-
-    while(1)
-    {
-        // Reset all variables at the start of each loop
-        up = 0; down = 0; left = 0; right = 0; duty_x = 0; duty_y = 0;
-        button_auto = 0; button_manual = 0; button_coin = 0;
-
-        // Read ADC channels for joystick (channels 8 and 9)
-        j8 = readADC(ADC_CHSELR_CHSEL8);
-        j9 = readADC(ADC_CHSELR_CHSEL9);
-		adc_v8 = (j8 * 3.3f) / 0x1000;
-		adc_v9 = (j9 * 3.3f) / 0x1000;
-
-		duty_x = voltageToDuty(adc_v8);
-		duty_y = voltageToDuty(adc_v9);
-        
-        //printf("%d,%d",duty_x, duty_y);
-
-        // if(adc_v8 > 1.6 && j8 <2900)
-        //     right = 1;
-        // else if(j8 <= 1000)
-        //     left = 1;
-		// if(j9 > 1000 && j9 <2900)
-        //     up = 1;
-        // else if(j9 <= 1000)
-        //     down = 1;
-
-        // Read push buttons (PB3: Auto_mode, PB5: Manual_mode, PB6: coin_picking)
-        if (!(GPIOB->IDR & (1 << 3))) 
-            button_auto = 1;
-        if (!(GPIOB->IDR & (1 << 5))) 
-            button_manual = 1;
-        if (!(GPIOB->IDR & (1 << 6))) 
-            button_coin = 1;
-
-        // Construct message to send to the slave device
-        sprintf(buff, "%d %d %d %d %d\n", 
-               duty_x, duty_y, button_auto, button_manual, button_coin);
-		
-
-        // Send the message using the JDY-40 protocol:
-        eputc2('@');  // Request message from   slave
-        eputc2('!');  // Attention character
-        waitms(5);
-        eputs2(buff);
-        waitms(5);
-        
-
-        timeout_cnt = 0;
-        	while(1)
-		{
-			if(ReceivedBytes2()>5) break; // Something has arrived
-			if(++timeout_cnt>200) break; // Wait up to 25ms for the repply
-			Delay_us(100); // 100us*250=25ms
-		}
-		
-		if(ReceivedBytes2()>5) // Something has arrived from the slave
-		{
-			egets2(buff, sizeof(buff)-1);
-			if(strlen(buff)>0) // Check for valid message size (5 characters + new line '\n')
-			{
-                int i;
-                // Remove any trailing new line characters from the buffer
-                for (i = 0; buff[i] != '\0'; i++) {
-                    if (buff[i] == '\n' || buff[i] == '\r') {
-                        buff[i] = '\0';
-                        break;
-                    }
-                }
-				printf("Slave says: %s\r", buff);
-                char displayStr[17];
-                sprintf(displayStr, "Freq: %s", buff);
-                LCDprint(displayStr, 2, 1);
-
-			}
-			else
-			{
-			
-				while(ReceivedBytes2()>0) egetc2(); // Clear FIFO
-			}
-		}
-		else // Timed out waiting for reply
-		{
-			printf(" No response \r\n", buff);
-			while(ReceivedBytes2()>0) egetc2(); // Clear FIFO
-		}
-		
-		waitms(50);  // Set the information interchange pace: communicate about every 50ms
-        fflush(stdout);
-        // GPIOA->ODR ^= BIT8; // Toggle PA8 (if used for LED indication)
-     
+    while(1) {
+        // Main loop: do whatever else you need
     }
+    return 0;
 }
