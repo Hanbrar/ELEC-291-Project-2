@@ -394,11 +394,12 @@ int main(void)
 		
 
         // Send the message using the JDY-40 protocol:
+        eputc2('@');  // Request message from   slave
         eputc2('!');  // Attention character
         waitms(5);
         eputs2(buff);
         waitms(5);
-        eputc2('@');  // Request message from   slave
+        
 
         timeout_cnt = 0;
         	while(1)
@@ -434,6 +435,6 @@ int main(void)
 		waitms(50);  // Set the information interchange pace: communicate about every 50ms
         fflush(stdout);
         // GPIOA->ODR ^= BIT8; // Toggle PA8 (if used for LED indication)
-        delayms(150);
+     
     }
 }
