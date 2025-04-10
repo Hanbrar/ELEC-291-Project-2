@@ -17,7 +17,7 @@ This project was designed and developed as part of ELEC291/292 at UBC. The robot
 | Hanryck Brar    | Project Lead     |
 | Guocheng Cao    | Servo Mechanism  |
 | Gavin Gao       | Software Lead    |
-| Peter Gao       | Hardware Design  |
+| Peter Gao       | Hardware Lead    |
 | Jamie Kang      | Debugging        |
 | Jacob Park      | Autocode System  |
 
