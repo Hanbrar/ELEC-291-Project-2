@@ -1,4 +1,5 @@
 # 🪙 Coin Picking Robot — ELEC291/292 Final Project
+![Project Badge](https://img.shields.io/badge/UBC-ELEC291-blue)
 
 > Autonomous & remote-controlled coin-collecting robot built with JDY-40 wireless communication, STM32 and PIC32 microcontrollers, and full electromechanical integration.
 
